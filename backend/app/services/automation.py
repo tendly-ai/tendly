@@ -24,11 +24,13 @@ import json
 import logging
 import os
 import re
+import subprocess
 import sys
 import tempfile
 from dataclasses import dataclass
+from difflib import SequenceMatcher
 from typing import Optional
-from urllib.parse import quote_plus, urlparse
+from urllib.parse import quote, quote_plus, urlparse
 
 from ..config import get_settings
 from ..models import CareRequest, Category, FamilyContact, PatientProfile
@@ -114,6 +116,8 @@ def _classify_task(req: CareRequest) -> str:
 
     # Family communication category always maps to call/message
     if req.category == Category.family_communication:
+        if any(kw in t for kw in ("message", "text", "send", "tell")):
+            return _TASK_SEND_MESSAGE
         if any(kw in t for kw in ("call", "video", "facetime", "zoom")):
             return _TASK_VIDEO_CALL
         return _TASK_SEND_MESSAGE
@@ -150,6 +154,291 @@ def _get_family_contact(patient_id: str) -> Optional[FamilyContact]:
     return None
 
 
+def _extract_requested_contact_name(transcript: str) -> str:
+    """Pull an explicit recipient name from contact/call requests."""
+    text = transcript.strip()
+    lower = text.lower()
+
+    def clean(candidate: str) -> str:
+        candidate = re.split(r"\b(?:saying|that|to say|and say|please|for me)\b", candidate, flags=re.IGNORECASE)[0]
+        candidate = candidate.strip(" .!?")
+        candidate = re.sub(r"^(my|the)\s+", "", candidate, flags=re.IGNORECASE)
+        if candidate.lower() in {"daughter", "son", "granddaughter", "grandson", "family", "family member"}:
+            return ""
+        return candidate.title() if candidate else ""
+
+    for marker in ("send a message to ", "send message to ", "send a text to ", "send text to "):
+        idx = lower.find(marker)
+        if idx != -1:
+            return clean(text[idx + len(marker):])
+
+    greeting_match = re.search(r"\b(?:say|send)\s+.+?\s+to\s+(.+)$", text, flags=re.IGNORECASE)
+    if greeting_match:
+        return clean(greeting_match.group(1))
+
+    match = re.search(r"\bsend\s+(.+?)\s+(?:a\s+)?(?:text|message)\b", text, flags=re.IGNORECASE)
+    if match:
+        return clean(match.group(1))
+
+    for marker in ("text ", "message "):
+        idx = lower.find(marker)
+        if idx != -1:
+            return clean(text[idx + len(marker):])
+
+    for marker in ("video call ", "facetime ", "phone ", "call "):
+        idx = lower.find(marker)
+        if idx != -1:
+            return clean(text[idx + len(marker):])
+
+    for marker in ("tell ", "ask "):
+        idx = lower.find(marker)
+        if idx != -1:
+            return clean(text[idx + len(marker):])
+
+    lower = text.lower()
+    relation_words = {"daughter", "son", "granddaughter", "grandson", "wife", "husband", "family"}
+    if any(word in lower for word in relation_words):
+        return ""
+
+    return ""
+
+
+def _extract_message_body(transcript: str, contact_name: str, patient_name: str) -> str:
+    patterns = (
+        r"\b(?:saying|that|to say|and say)\s+(.+)$",
+        r"\btell\s+.+?\s+that\s+(.+)$",
+        r"\b(?:say|send)\s+(.+?)\s+to\s+.+$",
+    )
+    for pattern in patterns:
+        match = re.search(pattern, transcript, flags=re.IGNORECASE)
+        if match:
+            body = match.group(1).strip(" .")
+            if body and body.lower() not in {"a message", "message", "a text", "text"}:
+                return body
+
+    return f"Hi {contact_name}, this is a message from {patient_name}."
+
+
+def _lookup_macos_contact(name: str) -> Optional[FamilyContact]:
+    """Look up a single named person in macOS Contacts without listing contacts."""
+    if not name or sys.platform != "darwin":
+        return None
+
+    script = r'''
+tell application "Contacts"
+    set searchName to __SEARCH_NAME__
+    set matches to people whose name contains searchName
+    if (count of matches) = 0 then return ""
+
+    set p to missing value
+    repeat with candidate in matches
+        set candidatePhone to ""
+        set candidateEmail to ""
+        try
+            if (count of phones of candidate) > 0 then set candidatePhone to value of phone 1 of candidate
+        end try
+        try
+            if (count of emails of candidate) > 0 then set candidateEmail to value of email 1 of candidate
+        end try
+        if candidatePhone is not "" or candidateEmail is not "" then
+            set p to candidate
+            exit repeat
+        end if
+    end repeat
+
+    if p is missing value then set p to item 1 of matches
+
+    set personName to name of p
+    set phoneValue to ""
+    set emailValue to ""
+    try
+        if (count of phones of p) > 0 then set phoneValue to value of phone 1 of p
+    end try
+    try
+        if (count of emails of p) > 0 then set emailValue to value of email 1 of p
+    end try
+    return personName & tab & phoneValue & tab & emailValue
+end tell
+'''.replace("__SEARCH_NAME__", json.dumps(name))
+
+    try:
+        proc = subprocess.run(
+            ["osascript", "-e", script],
+            capture_output=True,
+            text=True,
+            timeout=5,
+            check=False,
+        )
+    except Exception as exc:
+        logger.warning("macOS Contacts lookup failed for %s: %s", name, exc)
+        return None
+
+    if proc.returncode != 0:
+        logger.warning("macOS Contacts lookup failed for %s: %s", name, proc.stderr.strip())
+        return None
+
+    parts = proc.stdout.strip().split("\t")
+    if not parts or not parts[0]:
+        return None
+
+    return FamilyContact(
+        name=parts[0],
+        relation="contact",
+        phone=parts[1] if len(parts) > 1 and parts[1] else None,
+        email=parts[2] if len(parts) > 2 and parts[2] else None,
+    )
+
+
+def _list_macos_contact_names() -> list[str]:
+    """Return macOS contact names for local fuzzy matching, without reading values."""
+    if sys.platform != "darwin":
+        return []
+
+    script = r'''
+tell application "Contacts" to return name of people
+'''
+
+    try:
+        proc = subprocess.run(
+            ["osascript", "-e", script],
+            capture_output=True,
+            text=True,
+            timeout=8,
+            check=False,
+        )
+    except Exception as exc:
+        logger.warning("macOS Contacts name listing failed: %s", exc)
+        return []
+
+    if proc.returncode != 0:
+        logger.warning("macOS Contacts name listing failed: %s", proc.stderr.strip())
+        return []
+
+    names = [name.strip() for name in proc.stdout.strip().split(", ") if name.strip()]
+    return sorted(set(names))
+
+
+def _score_contact_name(spoken_name: str, candidate_name: str) -> float:
+    spoken = re.sub(r"[^a-z0-9]+", " ", spoken_name.lower()).strip()
+    candidate = re.sub(r"[^a-z0-9]+", " ", candidate_name.lower()).strip()
+    if not spoken or not candidate:
+        return 0.0
+
+    def loose_key(value: str) -> str:
+        value = re.sub(r"[^a-z0-9]+", "", value.lower())
+        if len(value) <= 2:
+            return value
+        return value[0] + re.sub(r"[aeiouy]", "", value[1:])
+
+    candidate_parts = candidate.split()
+    relation_words = {"aunt", "auntie", "uncle", "mom", "mother", "dad", "father", "grandma", "grandpa"}
+    first_name = candidate_parts[0]
+    first_score = SequenceMatcher(None, spoken, first_name).ratio()
+    if loose_key(spoken) and loose_key(spoken) == loose_key(first_name):
+        first_score = max(first_score, 0.95)
+
+    other_parts = candidate_parts[1:]
+    other_score = max((SequenceMatcher(None, spoken, part).ratio() for part in other_parts), default=0.0)
+    if first_name in relation_words:
+        other_score *= 0.78
+    else:
+        other_score *= 0.88
+
+    whole_score = SequenceMatcher(None, spoken, candidate).ratio()
+    return max(first_score, other_score, whole_score)
+
+
+def _local_best_contact_name(spoken_name: str, candidates: list[str]) -> tuple[str, float]:
+    scored = sorted(
+        ((candidate, _score_contact_name(spoken_name, candidate)) for candidate in candidates),
+        key=lambda item: item[1],
+        reverse=True,
+    )
+    return scored[0] if scored else ("", 0.0)
+
+
+def _llm_best_contact_name(spoken_name: str, candidates: list[str]) -> tuple[str, float]:
+    """Ask Claude to map a possibly misheard name to one local contact name."""
+    if not settings.allow_contact_llm_matching or not settings.anthropic_api_key or not candidates:
+        return "", 0.0
+
+    from anthropic import Anthropic  # type: ignore
+
+    candidate_names = candidates[:500]
+    prompt = (
+        "The user spoke a contact name that may be phonetically misspelled by speech-to-text.\n"
+        "Choose the single closest contact name from the list, or return an empty selected_name if none are close.\n"
+        "Return ONLY JSON like {\"selected_name\":\"Edan\",\"confidence\":0.92}.\n\n"
+        f"Spoken name: {spoken_name!r}\n"
+        "Contact names:\n"
+        + "\n".join(f"- {name}" for name in candidate_names)
+    )
+
+    try:
+        client = Anthropic(api_key=settings.anthropic_api_key)
+        resp = client.messages.create(
+            model=settings.anthropic_model,
+            max_tokens=120,
+            system="You match short spoken contact names to a provided contact list. Never invent names.",
+            messages=[{"role": "user", "content": prompt}],
+        )
+        data = _extract_json(resp.content[0].text)  # type: ignore[union-attr]
+    except Exception as exc:
+        logger.warning("LLM contact matching failed for %s: %s", spoken_name, exc)
+        return "", 0.0
+
+    selected_name = str(data.get("selected_name", "")).strip()
+    try:
+        confidence = float(data.get("confidence", 0.0))
+    except (TypeError, ValueError):
+        confidence = 0.0
+
+    if selected_name not in candidates:
+        return "", 0.0
+    return selected_name, confidence
+
+
+def _fuzzy_lookup_macos_contact(name: str) -> Optional[FamilyContact]:
+    """Resolve STT-ish names like 'Edon' to nearby Contacts names, then fetch details."""
+    candidates = _list_macos_contact_names()
+    if not candidates:
+        return None
+
+    local_name, local_score = _local_best_contact_name(name, candidates)
+    llm_name, llm_score = _llm_best_contact_name(name, candidates)
+
+    chosen_name = ""
+    if llm_name and llm_score >= 0.70:
+        chosen_name = llm_name
+    elif local_name and local_score >= 0.72:
+        chosen_name = local_name
+
+    if not chosen_name:
+        logger.info("No fuzzy contact match for %s; best local score was %.2f", name, local_score)
+        return None
+
+    logger.info("Resolved spoken contact %r to %r", name, chosen_name)
+    return _lookup_macos_contact(chosen_name)
+
+
+def _resolve_contact(req: CareRequest) -> Optional[FamilyContact]:
+    requested_name = _extract_requested_contact_name(req.transcript)
+    family_contact = _get_family_contact(req.patient_id)
+
+    if requested_name:
+        if family_contact and requested_name.lower() in family_contact.name.lower():
+            return family_contact
+        mac_contact = _lookup_macos_contact(requested_name)
+        if mac_contact:
+            return mac_contact
+        fuzzy_contact = _fuzzy_lookup_macos_contact(requested_name)
+        if fuzzy_contact:
+            return fuzzy_contact
+        return FamilyContact(name=requested_name, relation="contact")
+
+    return family_contact
+
+
 def _get_patient_name(patient_id: str) -> str:
     """Retrieve patient name from memory."""
     from . import memory
@@ -165,11 +454,16 @@ def plan_task(req: CareRequest) -> str:
     Should I go ahead?"
     """
     task_type = _classify_task(req)
-    contact = _get_family_contact(req.patient_id)
+    contact = _resolve_contact(req)
     contact_desc = f"{contact.name} ({contact.relation})" if contact else "family member"
 
+    video_call = any(kw in req.transcript.lower() for kw in ("video", "facetime", "zoom"))
+
     plans = {
-        _TASK_VIDEO_CALL: f"Start a video call with {contact_desc}.",
+        _TASK_VIDEO_CALL: (
+            f"Start a video call with {contact_desc}."
+            if video_call else f"Start a phone call with {contact_desc}."
+        ),
         _TASK_SEND_MESSAGE: f"Send a message to {contact_desc}.",
         _TASK_OPEN_EMAIL: "Open your email inbox.",
         _TASK_OPEN_PORTAL: "Open the patient health portal.",
@@ -401,7 +695,7 @@ def _generate_script(req: CareRequest) -> str:
     See: https://github.com/simular-ai/simulang / SKILL.md
     """
     task_type = _classify_task(req)
-    contact = _get_family_contact(req.patient_id)
+    contact = _resolve_contact(req)
 
     if task_type == _TASK_OPEN_EMAIL:
         return _script_open_url(
@@ -427,13 +721,15 @@ def _generate_script(req: CareRequest) -> str:
     elif task_type == _TASK_VIDEO_CALL:
         contact_name = contact.name if contact else "family member"
         contact_phone = contact.phone if contact else None
-        return _script_video_call(contact_name, contact_phone)
+        video = any(kw in req.transcript.lower() for kw in ("video", "facetime", "zoom"))
+        return _script_call(contact_name, contact_phone, video=video)
 
     elif task_type == _TASK_SEND_MESSAGE:
         contact_name = contact.name if contact else "family member"
+        contact_phone = contact.phone if contact else None
         contact_email = contact.email if contact else None
-        message = f"Hi {contact_name}, this is a message from {_get_patient_name(req.patient_id)}."
-        return _script_send_message(contact_name, contact_email, message)
+        message = _extract_message_body(req.transcript, contact_name, _get_patient_name(req.patient_id))
+        return _script_send_message(contact_name, contact_phone, contact_email, message)
 
     elif task_type == _TASK_OPEN_WEBSITE:
         url = _extract_url_from_transcript(req.transcript)
@@ -496,39 +792,162 @@ console.log('[Tendly] Done — browser opened to ' + {safe_url})
 """
 
 
-def _script_video_call(contact_name: str, contact_phone: Optional[str]) -> str:
-    """Simulang script: start a video call (via browser-based Zoom/Meet)."""
-    # In a real deployment, this would open a video call app or URL.
-    # For the hackathon, we open a Google Meet link as an example.
-    return f"""\
-// Simulang script: Start video call with {contact_name}
-// Generated by Tendly automation service
-import {{ App, FocusPolicy, Visibility }} from '@simular-ai/simulang-js'
+def _phone_uri_value(phone: Optional[str]) -> str:
+    if not phone:
+        return ""
+    return re.sub(r"[^0-9+]", "", phone)
 
-console.log('[Tendly] Starting video call with {contact_name}')
-// Open Google Meet (or a pre-configured video call link)
-const browser = App.defaultBrowser()
-browser.open('https://meet.google.com/new', FocusPolicy.Steal, Visibility.Show, true)
-console.log('[Tendly] Video call initiated for {contact_name}' +
-            ({f"' (phone: {contact_phone})'" if contact_phone else "''"}) )
+
+def _script_call(contact_name: str, contact_phone: Optional[str], *, video: bool) -> str:
+    """Simulang script: start a phone or FaceTime call via the native app."""
+    phone = _phone_uri_value(contact_phone)
+    recipient = phone or contact_name
+    call_kind = "FaceTime video call" if video else "FaceTime audio call"
+    safe_recipient = json.dumps(recipient)
+    safe_contact_name = json.dumps(contact_name)
+    safe_kind = json.dumps(call_kind)
+    return f"""\
+// Simulang script: Start {call_kind} with {contact_name}
+// Generated by Tendly automation service
+import {{ App, FocusPolicy, Visibility, KeyboardController, Clipboard, Key }} from '@simular-ai/simulang-js'
+
+async function run() {{
+    console.log('[Tendly] Starting ' + {safe_kind} + ' with ' + {safe_contact_name})
+    await App.launch('FaceTime', FocusPolicy.Steal, Visibility.Show, true)
+    await new Promise(resolve => setTimeout(resolve, 1500))
+
+    await Clipboard.set({safe_recipient})
+    await KeyboardController.chord([Key.Command, Key.L])
+    await KeyboardController.chord([Key.Command, Key.V])
+    await new Promise(resolve => setTimeout(resolve, 500))
+    await KeyboardController.press(Key.Return)
+
+    console.log('[Tendly] FaceTime handoff started for ' + {safe_contact_name})
+}}
+
+run()
 """
 
 
-def _script_send_message(contact_name: str, contact_email: Optional[str], message: str) -> str:
-    """Simulang script: send a message to a family contact via email."""
-    email = contact_email or "family@example.com"
-    safe_message = message.replace("'", "\\'")
+def _script_send_message(
+    contact_name: str,
+    contact_phone: Optional[str],
+    contact_email: Optional[str],
+    message: str,
+) -> str:
+    """Simulang script: draft a message in native Apple Messages."""
+    phone = _phone_uri_value(contact_phone)
+    recipient = phone or contact_email or contact_name
+    safe_recipient = json.dumps(recipient)
+    safe_contact_name = json.dumps(contact_name)
+    safe_message = json.dumps(message)
     return f"""\
 // Simulang script: Send message to {contact_name}
 // Generated by Tendly automation service
-import {{ App, FocusPolicy, Visibility }} from '@simular-ai/simulang-js'
+import {{ App, FocusPolicy, Visibility, KeyboardController, Clipboard, Key }} from '@simular-ai/simulang-js'
 
-console.log('[Tendly] Sending message to {contact_name} at {email}')
-const browser = App.defaultBrowser()
-const mailtoUrl = 'mailto:{email}?subject=Message from Tendly&body={safe_message}'
-browser.open(mailtoUrl, FocusPolicy.Steal, Visibility.Show, true)
-console.log('[Tendly] Message compose window opened for {contact_name}')
+async function run() {{
+    console.log('[Tendly] Launching Messages for ' + {safe_contact_name})
+    await App.launch('Messages', FocusPolicy.Steal, Visibility.Show, true)
+    await new Promise(resolve => setTimeout(resolve, 2000))
+
+    await KeyboardController.chord([Key.Command, Key.N])
+    await new Promise(resolve => setTimeout(resolve, 500))
+
+    await KeyboardController.type({safe_recipient})
+    await KeyboardController.press(Key.Return)
+    await new Promise(resolve => setTimeout(resolve, 1000))
+    await KeyboardController.press(Key.Tab)
+    await new Promise(resolve => setTimeout(resolve, 500))
+
+    await Clipboard.set({safe_message})
+    await KeyboardController.chord([Key.Command, Key.V])
+
+    // Deliberately leave the message drafted for the patient/caregiver to send.
+    // To auto-send after confirmation, uncomment the next line.
+    // await KeyboardController.press(Key.Return)
+
+    console.log('[Tendly] Message drafted for ' + {safe_contact_name})
+}}
+
+run()
 """
+
+
+def _local_call_target(contact_name: str, contact_phone: Optional[str], *, video: bool) -> str:
+    phone = _phone_uri_value(contact_phone)
+    if phone:
+        return f"facetime://{phone}" if video else f"facetime-audio://{phone}"
+    return f"facetime://{quote(contact_name)}"
+
+
+def _local_message_target(
+    contact_name: str,
+    contact_phone: Optional[str],
+    contact_email: Optional[str],
+    message: str,
+) -> str:
+    phone = _phone_uri_value(contact_phone)
+    if phone:
+        return f"sms:{phone}?body={quote(message)}"
+    if contact_email:
+        return f"mailto:{contact_email}?subject=Message%20from%20Tendly&body={quote(message)}"
+    return f"sms:{quote(contact_name)}?body={quote(message)}"
+
+
+async def _draft_message_local(recipient: str, message: str, contact_name: str) -> dict:
+    """Draft a message in the native Messages app via macOS UI scripting."""
+    if sys.platform != "darwin":
+        return await _open_local_target(
+            f"sms:{quote(recipient)}?body={quote(message)}",
+            f"Opened Messages handoff for {contact_name}.",
+        )
+
+    script = f'''
+set recipientText to {json.dumps(recipient)}
+set messageText to {json.dumps(message)}
+
+tell application "Messages" to activate
+delay 1
+
+tell application "System Events"
+    keystroke "n" using command down
+    delay 0.5
+
+    set the clipboard to recipientText
+    keystroke "v" using command down
+    key code 36
+    delay 1
+    key code 48
+    delay 0.5
+
+    set the clipboard to messageText
+    keystroke "v" using command down
+end tell
+'''
+
+    proc = await asyncio.create_subprocess_exec(
+        "osascript",
+        "-e",
+        script,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=15.0)
+    if proc.returncode != 0:
+        error = stderr.decode().strip() or stdout.decode().strip()
+        logger.warning("Messages UI draft failed: %s", error)
+        target = f"sms:{quote(recipient)}?body={quote(message)}"
+        return await _open_local_target(
+            target,
+            f"Opened Messages handoff for {contact_name}.",
+        )
+
+    logger.info("local Messages draft prepared for %s", contact_name)
+    return {
+        "status": "done",
+        "detail": f"Drafted a Messages conversation for {contact_name}.",
+    }
 
 
 def _extract_media_query(transcript: str) -> str:
@@ -631,19 +1050,26 @@ async def _execute_local_open(script_content: str) -> dict:
     """Local fallback for generated browser-opening Simulang scripts.
 
     The hackathon app runs even when the `simulang` CLI is not installed. For
-    scripts that only open a URL/mailto target, we can perform the same visible
+    scripts that only open a URL/app handoff target, we can perform the same visible
     action locally instead of downgrading to a pure mock.
     """
     target = _extract_open_target(script_content)
     if not target:
         raise RuntimeError("simulang CLI not found on PATH")
 
+    return await _open_local_target(
+        target,
+        f"Opened {target} locally because the simulang CLI is not installed.",
+    )
+
+
+async def _open_local_target(target: str, detail: str) -> dict:
     if sys.platform == "darwin":
         cmd = ["open", target]
     elif sys.platform.startswith("linux"):
         cmd = ["xdg-open", target]
     else:
-        raise RuntimeError("simulang CLI not found on PATH")
+        raise RuntimeError("local app handoff is not supported on this platform")
 
     proc = await asyncio.create_subprocess_exec(
         *cmd,
@@ -653,13 +1079,10 @@ async def _execute_local_open(script_content: str) -> dict:
     stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=10.0)
     if proc.returncode != 0:
         error = stderr.decode().strip() or stdout.decode().strip()
-        raise RuntimeError(f"local open fallback failed: {error}")
+        raise RuntimeError(f"local handoff failed: {error}")
 
-    logger.info("simulang CLI missing; opened target locally: %s", target)
-    return {
-        "status": "done",
-        "detail": f"Opened {target} locally because the simulang CLI is not installed.",
-    }
+    logger.info("local app handoff opened: %s", target)
+    return {"status": "done", "detail": detail}
 
 
 # ---------------------------------------------------------------------------
@@ -681,6 +1104,8 @@ async def run_task(req: CareRequest) -> dict:
     task_type = _classify_task(req)
     plan = plan_task(req)
     automation_plan: Optional[AutomationPlan] = None
+    contact = _resolve_contact(req)
+
     if task_type in {_TASK_OPEN_WEBSITE, _TASK_PLAY_MEDIA, _TASK_GENERAL_NAV}:
         automation_plan = await _plan_automation(req)
         plan = automation_plan.description
@@ -710,11 +1135,28 @@ async def run_task(req: CareRequest) -> dict:
     except RuntimeError as exc:
         logger.warning("simulang execution failed: %s", exc)
 
+        if task_type == _TASK_SEND_MESSAGE:
+            contact_name = contact.name if contact else "family member"
+            contact_phone = contact.phone if contact else None
+            contact_email = contact.email if contact else None
+            message = _extract_message_body(req.transcript, contact_name, _get_patient_name(req.patient_id))
+            recipient = _phone_uri_value(contact_phone) or contact_email or contact_name
+            return await _draft_message_local(recipient, message, contact_name)
+
+        if task_type == _TASK_VIDEO_CALL:
+            contact_name = contact.name if contact else "family member"
+            contact_phone = contact.phone if contact else None
+            video = any(kw in req.transcript.lower() for kw in ("video", "facetime", "zoom"))
+            target = _local_call_target(contact_name, contact_phone, video=video)
+            return await _open_local_target(
+                target,
+                f"Opened call handoff for {contact_name}.",
+            )
+
         if not settings.allow_mocks:
             raise
 
         # Fall back to rich mock response
-        contact = _get_family_contact(req.patient_id)
         mock_detail = _build_mock_detail(task_type, plan, contact, req)
         return {"status": "mocked", "detail": mock_detail}
 
@@ -737,9 +1179,9 @@ def _build_mock_detail(
 
     details = {
         _TASK_VIDEO_CALL: f"[Simular mock] Would start video call{contact_info} "
-                          f"via simulang App.defaultBrowser().open('https://meet.google.com/new')",
+                          f"via FaceTime or phone-call URL handoff",
         _TASK_SEND_MESSAGE: f"[Simular mock] Would send message{contact_info} "
-                            f"via simulang browser mailto: link",
+                            f"via Apple Messages URL handoff when a phone number is available",
         _TASK_OPEN_EMAIL: "[Simular mock] Would open email via simulang "
                           "App.defaultBrowser().open('https://mail.google.com')",
         _TASK_OPEN_PORTAL: "[Simular mock] Would open patient portal via simulang "
