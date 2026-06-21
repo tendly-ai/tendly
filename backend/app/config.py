@@ -25,6 +25,7 @@ class Settings:
     arize_space_id: str = os.getenv("ARIZE_SPACE_ID", "")
     sentry_dsn: str = os.getenv("SENTRY_DSN", "")
     allow_mocks: bool = _bool("TENDLY_ALLOW_MOCKS", True)
+    allow_contact_llm_matching: bool = _bool("TENDLY_ALLOW_CONTACT_LLM_MATCHING", False)
 
 
 @lru_cache
