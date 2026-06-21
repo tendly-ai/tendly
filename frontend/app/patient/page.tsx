@@ -16,7 +16,7 @@ type UIState =
 const PATIENTS: { id: string; name: string }[] = [
   { id: "patient_001", name: "Mary Johnson" },
   { id: "patient_002", name: "Robert Chen" },
-  { id: "patient_003", name: "Dorothy Williams" },
+  { id: "patient_003", name: "Gloria Reyes" },
 ];
 
 export default function PatientPage() {
