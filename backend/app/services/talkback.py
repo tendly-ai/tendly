@@ -41,6 +41,8 @@ def _fallback(kind: str, req: CareRequest, plan: str = "") -> str:
 
     if kind == "automation_done":
         if req.category == Category.family_communication:
+            if any(word in req.transcript.lower() for word in ("facetime", "call", "phone", "video")):
+                return f"Of course, {name}. I have the call ready for you."
             return f"Of course, {name}. I'll help you reach your family now."
         return f"Of course, {name}. I'll take care of that for you now."
 
