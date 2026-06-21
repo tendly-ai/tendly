@@ -1,0 +1,253 @@
+/* Caregiver Dashboard — §3.2 */
+
+/* ---- keyframes ---- */
+@keyframes pulseHighlight {
+  0% { box-shadow: 0 0 0 0 rgba(234, 88, 12, 0.5); }
+  50% { box-shadow: 0 0 14px 4px rgba(234, 88, 12, 0.25); }
+  100% { box-shadow: 0 0 0 0 rgba(234, 88, 12, 0); }
+}
+
+@keyframes slideIn {
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ---- layout ---- */
+.wrapper {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 24px 20px 48px;
+}
+
+.header {
+  margin-bottom: 24px;
+}
+
+.title {
+  font-size: 28px;
+  font-weight: 700;
+  margin: 0 0 4px;
+}
+
+.subtitle {
+  color: #64748b;
+  font-size: 15px;
+  margin: 0;
+}
+
+.liveIndicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: #16a34a;
+  margin-left: 12px;
+  font-weight: 500;
+}
+
+.liveDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #16a34a;
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+/* ---- section headings ---- */
+.sectionHeading {
+  font-size: 14px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #94a3b8;
+  margin: 28px 0 12px;
+}
+
+/* ---- card list ---- */
+.cardList {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* ---- request card ---- */
+.card {
+  background: #fff;
+  border-radius: 12px;
+  padding: 18px 20px;
+  border-left: 6px solid #cbd5e1;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+  animation: slideIn 0.3s ease-out;
+  transition: opacity 0.3s, box-shadow 0.3s;
+}
+
+.cardResolved {
+  opacity: 0.55;
+}
+
+.cardHighlight {
+  animation: pulseHighlight 1.2s ease-out 3;
+}
+
+/* urgency border colors */
+.urgencyEmergency { border-left-color: #dc2626; }
+.urgencyHigh      { border-left-color: #ea580c; }
+.urgencyMedium    { border-left-color: #ca8a04; }
+.urgencyLow       { border-left-color: #16a34a; }
+
+/* ---- card header row ---- */
+.cardHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.patientInfo {
+  font-size: 17px;
+  font-weight: 600;
+}
+
+.badges {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.badge {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.badgeEmergency { background: #fef2f2; color: #dc2626; }
+.badgeHigh      { background: #fff7ed; color: #ea580c; }
+.badgeMedium    { background: #fefce8; color: #a16207; }
+.badgeLow       { background: #f0fdf4; color: #16a34a; }
+
+.categoryBadge {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  background: #f1f5f9;
+  color: #475569;
+}
+
+/* ---- card body ---- */
+.summaryText {
+  font-size: 16px;
+  margin: 10px 0 6px;
+  line-height: 1.45;
+}
+
+.transcript {
+  color: #64748b;
+  font-style: italic;
+  font-size: 14px;
+  margin: 4px 0;
+  line-height: 1.4;
+}
+
+.suggestedAction {
+  font-size: 14px;
+  color: #334155;
+  margin: 8px 0 4px;
+}
+
+.suggestedActionLabel {
+  font-weight: 600;
+  color: #475569;
+}
+
+.patientContext {
+  font-size: 13px;
+  color: #64748b;
+  background: #f8fafc;
+  border-radius: 6px;
+  padding: 8px 12px;
+  margin-top: 8px;
+  line-height: 1.4;
+}
+
+.patientContextLabel {
+  font-weight: 600;
+  color: #475569;
+}
+
+.timestamp {
+  font-size: 12px;
+  color: #94a3b8;
+  margin-top: 10px;
+}
+
+/* ---- card footer / status controls ---- */
+.cardFooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 14px;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.statusGroup {
+  display: flex;
+  gap: 6px;
+}
+
+.statusBtn {
+  padding: 5px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  border-radius: 6px;
+  border: 1px solid #e2e8f0;
+  background: #fff;
+  color: #475569;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.statusBtn:hover {
+  background: #f1f5f9;
+}
+
+.statusBtnActive {
+  background: #1e293b;
+  color: #fff;
+  border-color: #1e293b;
+}
+
+.statusBtnActive:hover {
+  background: #334155;
+}
+
+.currentStatus {
+  font-size: 13px;
+  font-weight: 600;
+  padding: 4px 12px;
+  border-radius: 6px;
+}
+
+.statusNew        { background: #eff6ff; color: #2563eb; }
+.statusInProgress { background: #fefce8; color: #a16207; }
+.statusResolved   { background: #f0fdf4; color: #16a34a; }
+
+/* ---- empty state ---- */
+.emptyState {
+  text-align: center;
+  padding: 60px 20px;
+  color: #94a3b8;
+  font-size: 16px;
+}
