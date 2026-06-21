@@ -1,0 +1,301 @@
+.root {
+  display: flex;
+  min-height: calc(100vh - 52px);
+}
+
+/* ── Left dark panel ──────────────────────── */
+.left {
+  width: 42%;
+  min-height: 100%;
+  background: #09090b;
+  background-image: radial-gradient(circle at 1px 1px, rgba(255,255,255,0.07) 1px, transparent 0);
+  background-size: 28px 28px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 48px 48px 36px;
+  position: relative;
+}
+
+.leftContent {
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+  flex: 1;
+  justify-content: center;
+}
+
+.logoRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  position: absolute;
+  top: 48px;
+  left: 48px;
+}
+
+.logoMark { color: #a78bfa; font-size: 14px; }
+
+.logoText {
+  font-size: 15px;
+  font-weight: 600;
+  color: #ffffff;
+  letter-spacing: -0.2px;
+}
+
+.tagline {
+  font-size: 40px;
+  font-weight: 700;
+  color: #ffffff;
+  line-height: 1.1;
+  letter-spacing: -1.2px;
+  margin-top: 20px;
+}
+
+.tagSub {
+  font-size: 15px;
+  color: #71717a;
+  line-height: 1.6;
+  margin: 0;
+  max-width: 280px;
+}
+
+.leftFooter {
+  font-size: 11px;
+  color: #3f3f46;
+  letter-spacing: 0.3px;
+}
+
+/* ── Right light panel ────────────────────── */
+.right {
+  flex: 1;
+  background: #fafafa;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 48px;
+  overflow-y: auto;
+}
+
+.rightInner {
+  width: 100%;
+  max-width: 360px;
+}
+
+.welcome {
+  font-size: 24px;
+  font-weight: 700;
+  color: #09090b;
+  letter-spacing: -0.5px;
+  margin: 0 0 6px;
+}
+
+.welcomeSub {
+  font-size: 14px;
+  color: #71717a;
+  margin: 0 0 32px;
+}
+
+/* ── Sections ─────────────────────────────── */
+.section { margin-bottom: 4px; }
+
+.sectionLabel {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: #a1a1aa;
+  margin-bottom: 8px;
+}
+
+.accountList {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.divider {
+  height: 1px;
+  background: #e4e4e7;
+  margin: 20px 0;
+}
+
+/* ── Account row ──────────────────────────── */
+.accountRow {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid transparent;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.12s, border-color 0.12s, box-shadow 0.12s;
+}
+
+.accountRow:hover {
+  background: #ffffff;
+  border-color: #e4e4e7;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.06), 0 2px 12px rgba(0,0,0,0.04);
+}
+
+.accountRowSelected {
+  background: #ffffff;
+  border-color: #d4d4d8;
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+}
+
+.avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+  color: #fff;
+  flex-shrink: 0;
+  letter-spacing: 0.3px;
+}
+
+.accountInfo { flex: 1; min-width: 0; }
+
+.accountName {
+  font-size: 14px;
+  font-weight: 600;
+  color: #09090b;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.accountSub {
+  font-size: 12px;
+  color: #71717a;
+  margin-top: 1px;
+}
+
+.chevron {
+  font-size: 18px;
+  color: #a1a1aa;
+  transition: opacity 0.12s, transform 0.2s;
+  line-height: 1;
+}
+
+/* ── Password expand row ──────────────────── */
+.passwordRow {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 12px 12px;
+  background: #ffffff;
+  border: 1px solid #d4d4d8;
+  border-top: none;
+  border-radius: 0 0 10px 10px;
+  animation: expandDown 0.15s ease-out;
+  margin-bottom: 4px;
+}
+
+@keyframes expandDown {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.passwordInput {
+  width: 100%;
+  font-size: 14px;
+  font-family: inherit;
+  padding: 9px 12px;
+  border-radius: 8px;
+  border: 1px solid #e4e4e7;
+  background: #fafafa;
+  color: #09090b;
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+  box-sizing: border-box;
+}
+.passwordInput:focus {
+  border-color: #a1a1aa;
+  box-shadow: 0 0 0 3px rgba(0,0,0,0.04);
+  background: #fff;
+}
+.passwordInput::placeholder { color: #a1a1aa; }
+
+.passwordInputError {
+  border-color: #fca5a5 !important;
+  box-shadow: 0 0 0 3px rgba(239,68,68,0.08) !important;
+}
+
+.pwError {
+  font-size: 12px;
+  color: #dc2626;
+  margin: 0;
+}
+
+.continueBtn {
+  align-self: flex-end;
+  padding: 7px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  background: #09090b;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: opacity 0.12s;
+}
+.continueBtn:hover { opacity: 0.8; }
+
+/* ── Add account ──────────────────────────── */
+.addAccountRow {
+  margin-top: 20px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.addAccountBtn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #71717a;
+  background: transparent;
+  border: 1px dashed #d4d4d8;
+  border-radius: 8px;
+  padding: 7px 14px;
+  cursor: pointer;
+  transition: border-color 0.12s, color 0.12s, background 0.12s;
+}
+.addAccountBtn:hover {
+  border-color: #a1a1aa;
+  color: #09090b;
+  background: #fff;
+}
+
+.addIcon {
+  font-size: 16px;
+  line-height: 1;
+  color: #a1a1aa;
+}
+
+.toast {
+  font-size: 12px;
+  color: #71717a;
+  background: #f4f4f5;
+  border: 1px solid #e4e4e7;
+  border-radius: 6px;
+  padding: 4px 10px;
+  animation: fadeIn 0.15s ease-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}

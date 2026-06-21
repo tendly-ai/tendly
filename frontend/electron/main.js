@@ -95,7 +95,7 @@ function createPopover() {
     height: POPOVER_HEIGHT,
     show: false,
     frame: false,
-    transparent: true,
+    backgroundColor: '#09090b',
     resizable: false,
     skipTaskbar: true,
     alwaysOnTop: true,
@@ -155,7 +155,7 @@ function createTray() {
   img.setTemplateImage(true);
 
   tray = new Tray(img);
-  tray.setToolTip('CareLink');
+  tray.setToolTip('Tendly');
 
   // Left-click → toggle popover
   tray.on('click', () => togglePopover());
@@ -163,7 +163,7 @@ function createTray() {
   // Right-click → context menu with navigation shortcuts
   tray.on('right-click', () => {
     const menu = Menu.buildFromTemplate([
-      { label: 'Show CareLink',         click: () => showWindow() },
+      { label: 'Show Tendly',         click: () => showWindow() },
       { type: 'separator' },
       { label: 'Patient Interface',     click: () => navigate('/patient') },
       { label: 'Caregiver Dashboard',   click: () => navigate('/dashboard') },

@@ -60,6 +60,7 @@ async def _process(patient_id: str, transcript: str) -> CareRequest:
         else:
             res = await automation.run_task(req)
             req.task_state = res.get("status", "done")
+            req.status = Status.resolved
             req.spoken_response = (
                 await talkback.automation_done(req)
                 if req.task_state in ("done", "mocked")

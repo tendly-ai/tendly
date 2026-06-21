@@ -18,6 +18,7 @@ async def confirm(body: ConfirmTaskBody):
 
     if not body.confirmed:
         req.task_state = "cancelled"
+        req.status = Status.resolved
         req.spoken_response = await talkback.cancelled(req)
         memory.save_request(req)
         await manager.broadcast("request.updated", req.model_dump())

@@ -1,312 +1,310 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { listRequests, updateStatus, WS_URL } from "../../lib/api";
 import type { CareRequest, Status, Urgency } from "../../lib/types";
+import { useAccount } from "../context/AccountContext";
 import styles from "./dashboard.module.css";
 
-/* ---- urgency sort rank (lower = more urgent) ---- */
-const URGENCY_RANK: Record<Urgency, number> = {
-  emergency: 0,
-  high: 1,
-  medium: 2,
-  low: 3,
-};
+const URGENCY_RANK: Record<Urgency, number> = { emergency: 0, high: 1, medium: 2, low: 3 };
 
-/* ---- human-readable labels ---- */
 const URGENCY_LABEL: Record<Urgency, string> = {
-  emergency: "EMERGENCY",
-  high: "HIGH",
-  medium: "MEDIUM",
-  low: "LOW",
+  emergency: "Emergency", high: "High", medium: "Medium", low: "Low",
 };
 
 const CATEGORY_LABEL: Record<string, string> = {
-  urgent_medical: "Urgent Medical",
-  in_person_caregiver: "In-Person Caregiver",
-  routine_comfort: "Routine Comfort",
-  automated_task: "Automated Task",
-  family_communication: "Family Communication",
-  general_conversation: "General Conversation",
+  urgent_medical:       "Medical",
+  in_person_caregiver:  "Caregiver",
+  routine_comfort:      "Comfort",
+  automated_task:       "Automated",
+  family_communication: "Family",
+  general_conversation: "General",
 };
 
 const STATUS_LABEL: Record<Status, string> = {
-  new: "New",
-  in_progress: "In Progress",
-  resolved: "Resolved",
+  new: "New", in_progress: "In Progress", resolved: "Resolved",
 };
 
-/* ---- CSS class lookups ---- */
+const NEXT: Record<Status, Status[]> = {
+  new: ["in_progress"], in_progress: ["resolved"], resolved: [],
+};
+
+const URGENCY_TAG: Record<Urgency, string> = {
+  emergency: styles.tagEmergency, high: styles.tagHigh,
+  medium: styles.tagMedium, low: styles.tagLow,
+};
+
 const URGENCY_BORDER: Record<Urgency, string> = {
-  emergency: styles.urgencyEmergency,
-  high: styles.urgencyHigh,
-  medium: styles.urgencyMedium,
-  low: styles.urgencyLow,
+  emergency: styles.urgencyEmergency, high: styles.urgencyHigh,
+  medium: styles.urgencyMedium, low: styles.urgencyLow,
 };
 
-const URGENCY_BADGE: Record<Urgency, string> = {
-  emergency: styles.badgeEmergency,
-  high: styles.badgeHigh,
-  medium: styles.badgeMedium,
-  low: styles.badgeLow,
+const STATUS_PILL: Record<Status, string> = {
+  new: styles.statusNew, in_progress: styles.statusInProgress, resolved: styles.statusResolved,
 };
 
-const STATUS_CLASS: Record<Status, string> = {
-  new: styles.statusNew,
-  in_progress: styles.statusInProgress,
-  resolved: styles.statusResolved,
-};
+type Filter = "all" | "emergency" | "high" | "in_progress";
 
-/* ---- sorting ---- */
-function sortRequests(list: CareRequest[]): CareRequest[] {
+function sort(list: CareRequest[]) {
   return [...list].sort((a, b) => {
-    const aResolved = a.status === "resolved" ? 1 : 0;
-    const bResolved = b.status === "resolved" ? 1 : 0;
-    if (aResolved !== bResolved) return aResolved - bResolved;
-
-    const urgDiff = URGENCY_RANK[a.urgency] - URGENCY_RANK[b.urgency];
-    if (urgDiff !== 0) return urgDiff;
-
-    return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+    const ar = a.status === "resolved" ? 1 : 0, br = b.status === "resolved" ? 1 : 0;
+    if (ar !== br) return ar - br;
+    const ud = URGENCY_RANK[a.urgency] - URGENCY_RANK[b.urgency];
+    return ud !== 0 ? ud : new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
   });
 }
 
-/* ---- format timestamp ---- */
-function formatTime(iso: string): string {
-  const d = new Date(iso);
-  return d.toLocaleString(undefined, {
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
+function fmt(iso: string) {
+  return new Date(iso).toLocaleString(undefined, {
+    month: "short", day: "numeric", hour: "2-digit", minute: "2-digit",
   });
 }
 
-/* ---- status flow: allowed next states ---- */
-const NEXT_STATUSES: Record<Status, Status[]> = {
-  new: ["in_progress"],
-  in_progress: ["resolved"],
-  resolved: [],
-};
-
-/* ============================================================
-   Dashboard component
-   ============================================================ */
 export default function Dashboard() {
-  const [requests, setRequests] = useState<CareRequest[]>([]);
-  const [wsConnected, setWsConnected] = useState(false);
-  const highlightedIds = useRef<Set<string>>(new Set());
-  const knownIds = useRef<Set<string>>(new Set());
+  const { account } = useAccount();
+  const router      = useRouter();
 
-  /* Fetch all requests and update state */
+  const [requests,  setRequests]  = useState<CareRequest[]>([]);
+  const [connected, setConnected] = useState(false);
+  const [filter,    setFilter]    = useState<Filter>("all");
+
+  const highlighted = useRef<Set<string>>(new Set());
+  const knownIds    = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    if (!account) router.replace("/");
+  }, [account, router]);
+
   const refresh = useCallback(async () => {
     try {
       const data = await listRequests();
-      setRequests((prev) => {
-        /* Detect new high-urgency requests for highlight */
-        const prevIds = new Set(prev.map((r) => r.request_id));
+      setRequests(prev => {
+        const prevIds = new Set(prev.map(r => r.request_id));
         for (const r of data) {
-          if (
-            !prevIds.has(r.request_id) &&
-            !knownIds.current.has(r.request_id) &&
-            (r.urgency === "emergency" || r.urgency === "high")
-          ) {
-            highlightedIds.current.add(r.request_id);
-            setTimeout(() => {
-              highlightedIds.current.delete(r.request_id);
-            }, 4000);
+          if (!prevIds.has(r.request_id) && !knownIds.current.has(r.request_id)
+              && (r.urgency === "emergency" || r.urgency === "high")) {
+            highlighted.current.add(r.request_id);
+            setTimeout(() => highlighted.current.delete(r.request_id), 4000);
           }
           knownIds.current.add(r.request_id);
         }
-        return sortRequests(data);
+        return sort(data);
       });
-    } catch {
-      /* network error — keep existing state */
-    }
+    } catch {}
   }, []);
 
-  /* WebSocket setup */
   useEffect(() => {
     refresh();
-
     let ws: WebSocket | null = null;
-    let reconnectTimer: ReturnType<typeof setTimeout>;
-
+    let timer: ReturnType<typeof setTimeout>;
     function connect() {
       ws = new WebSocket(WS_URL);
-      ws.onopen = () => setWsConnected(true);
-      ws.onclose = () => {
-        setWsConnected(false);
-        reconnectTimer = setTimeout(connect, 3000);
-      };
+      ws.onopen  = () => setConnected(true);
+      ws.onclose = () => { setConnected(false); timer = setTimeout(connect, 3000); };
       ws.onerror = () => ws?.close();
       ws.onmessage = () => refresh();
     }
-
     connect();
-
-    return () => {
-      clearTimeout(reconnectTimer);
-      ws?.close();
-    };
+    return () => { clearTimeout(timer); ws?.close(); };
   }, [refresh]);
 
-  /* Status change handler */
-  async function handleStatusChange(requestId: string, newStatus: Status) {
-    try {
-      await updateStatus(requestId, newStatus);
-      await refresh();
-    } catch {
-      /* allow ws broadcast to fix state */
-    }
+  async function changeStatus(id: string, s: Status) {
+    try { await updateStatus(id, s); await refresh(); } catch {}
   }
 
-  /* Split active vs resolved */
-  const activeRequests = requests.filter((r) => r.status !== "resolved");
-  const resolvedRequests = requests.filter((r) => r.status === "resolved");
+  if (!account) return null;
+
+  const active   = requests.filter(r => r.status !== "resolved");
+  const resolved = requests.filter(r => r.status === "resolved");
+
+  const statActive    = active.length;
+  const statEmergency = requests.filter(r => r.urgency === "emergency" && r.status !== "resolved").length;
+  const statInProg    = requests.filter(r => r.status === "in_progress").length;
+  const statResolved  = resolved.length;
+
+  const filteredActive = active.filter(r => {
+    if (filter === "all")         return true;
+    if (filter === "emergency")   return r.urgency === "emergency";
+    if (filter === "high")        return r.urgency === "high";
+    if (filter === "in_progress") return r.status === "in_progress";
+    return true;
+  });
+
+  const FILTERS: { key: Filter; label: string }[] = [
+    { key: "all",         label: "All" },
+    { key: "emergency",   label: "Emergency" },
+    { key: "high",        label: "High" },
+    { key: "in_progress", label: "In Progress" },
+  ];
 
   return (
-    <main className={styles.wrapper}>
-      {/* Header */}
-      <header className={styles.header}>
-        <h1 className={styles.title}>
-          Caregiver Dashboard
-          {wsConnected && (
-            <span className={styles.liveIndicator}>
-              <span className={styles.liveDot} /> Live
-            </span>
-          )}
-        </h1>
-        <p className={styles.subtitle}>
-          {activeRequests.length} active request{activeRequests.length !== 1 ? "s" : ""}
-          {resolvedRequests.length > 0 &&
-            ` · ${resolvedRequests.length} resolved`}
-        </p>
-      </header>
+    <div className={styles.page}>
 
-      {/* Active requests */}
-      {activeRequests.length === 0 && resolvedRequests.length === 0 && (
-        <div className={styles.emptyState}>
-          No requests yet. Waiting for patients&hellip;
+      {/* ── Left dark sidebar ── */}
+      <div className={styles.sidebar}>
+        <div className={styles.sidebarProfile}>
+          <div className={styles.sidebarAvatar} style={{ background: account.color }}>
+            {account.initials}
+          </div>
+          <div className={styles.sidebarName}>{account.name.split(" ")[0]}.</div>
+          <div className={styles.sidebarRole}>{account.subtitle}</div>
         </div>
-      )}
 
-      {activeRequests.length > 0 && (
-        <>
-          <div className={styles.sectionHeading}>Active Requests</div>
-          <div className={styles.cardList}>
-            {activeRequests.map((r) => (
-              <RequestCard
-                key={r.request_id}
-                request={r}
-                highlighted={highlightedIds.current.has(r.request_id)}
-                onStatusChange={handleStatusChange}
-              />
+        <div className={styles.sidebarDivider} />
+
+        <div className={styles.sidebarSection}>
+          <div className={styles.sidebarSectionLabel}>Overview</div>
+          <div className={styles.sidebarStats}>
+            {[
+              { label: "Active",      value: statActive,    alert: false },
+              { label: "Emergency",   value: statEmergency, alert: true  },
+              { label: "In Progress", value: statInProg,    alert: false },
+              { label: "Resolved",    value: statResolved,  alert: false },
+            ].map(s => (
+              <div key={s.label} className={styles.sidebarStat}>
+                <span className={styles.sidebarStatLabel}>{s.label}</span>
+                <span className={`${styles.sidebarStatNum} ${s.alert && s.value > 0 ? styles.sidebarStatNumAlert : ""}`}>
+                  {s.value}
+                </span>
+              </div>
             ))}
           </div>
-        </>
-      )}
+        </div>
 
-      {/* Resolved requests */}
-      {resolvedRequests.length > 0 && (
-        <>
-          <div className={styles.sectionHeading}>Resolved</div>
-          <div className={styles.cardList}>
-            {resolvedRequests.map((r) => (
-              <RequestCard
-                key={r.request_id}
-                request={r}
-                highlighted={false}
-                onStatusChange={handleStatusChange}
-              />
-            ))}
-          </div>
-        </>
-      )}
-    </main>
-  );
-}
+        <div className={styles.sidebarDivider} />
 
-/* ============================================================
-   Request Card
-   ============================================================ */
-interface RequestCardProps {
-  request: CareRequest;
-  highlighted: boolean;
-  onStatusChange: (id: string, status: Status) => void;
-}
-
-function RequestCard({ request: r, highlighted, onStatusChange }: RequestCardProps) {
-  const isResolved = r.status === "resolved";
-  const nextStatuses = NEXT_STATUSES[r.status];
-
-  const cardClass = [
-    styles.card,
-    URGENCY_BORDER[r.urgency],
-    isResolved ? styles.cardResolved : "",
-    highlighted ? styles.cardHighlight : "",
-  ]
-    .filter(Boolean)
-    .join(" ");
-
-  return (
-    <div className={cardClass}>
-      {/* Header row */}
-      <div className={styles.cardHeader}>
-        <span className={styles.patientInfo}>
-          {r.patient_name} &middot; Room {r.room_number}
-        </span>
-        <div className={styles.badges}>
-          <span className={`${styles.badge} ${URGENCY_BADGE[r.urgency]}`}>
-            {URGENCY_LABEL[r.urgency]}
-          </span>
-          <span className={styles.categoryBadge}>
-            {CATEGORY_LABEL[r.category] ?? r.category}
+        <div className={styles.sidebarLive}>
+          <div className={styles.sidebarLiveDot} />
+          <span className={`${styles.sidebarLiveLabel} ${connected ? styles.sidebarLiveLabelOn : ""}`}>
+            {connected ? "Live" : "Connecting…"}
           </span>
         </div>
       </div>
 
-      {/* AI Summary */}
-      <p className={styles.summaryText}>{r.summary}</p>
+      {/* ── Main content ── */}
+      <div className={styles.main}>
+        <div className={styles.inner}>
 
-      {/* Original transcript */}
-      <p className={styles.transcript}>&ldquo;{r.transcript}&rdquo;</p>
+          <div className={styles.header}>
+            <div className={styles.heading}>
+              Patient Requests
+              {connected && (
+                <span className={styles.live}>
+                  <span className={styles.liveDot} /> Live
+                </span>
+              )}
+            </div>
+          </div>
 
-      {/* Suggested action */}
-      <p className={styles.suggestedAction}>
-        <span className={styles.suggestedActionLabel}>Suggested: </span>
-        {r.suggested_action}
-      </p>
+          {/* Stats row */}
+          <div className={styles.statsRow}>
+            {[
+              { label: "Active",      value: statActive,    alert: false },
+              { label: "Emergency",   value: statEmergency, alert: true  },
+              { label: "In Progress", value: statInProg,    alert: false },
+              { label: "Resolved",    value: statResolved,  alert: false },
+            ].map(s => (
+              <div key={s.label} className={styles.statCard}>
+                <div className={`${styles.statNum} ${s.alert && s.value > 0 ? styles.statNumAlert : ""}`}>
+                  {s.value}
+                </div>
+                <div className={styles.statLabel}>{s.label}</div>
+              </div>
+            ))}
+          </div>
 
-      {/* Patient context */}
-      {r.patient_context && (
-        <div className={styles.patientContext}>
-          <span className={styles.patientContextLabel}>Patient Context: </span>
-          {r.patient_context}
-        </div>
-      )}
-
-      {/* Timestamp */}
-      <div className={styles.timestamp}>{formatTime(r.created_at)}</div>
-
-      {/* Footer: status controls */}
-      <div className={styles.cardFooter}>
-        <span className={`${styles.currentStatus} ${STATUS_CLASS[r.status]}`}>
-          {STATUS_LABEL[r.status]}
-        </span>
-        {nextStatuses.length > 0 && (
-          <div className={styles.statusGroup}>
-            {nextStatuses.map((s) => (
+          {/* Filter row */}
+          <div className={styles.filterRow}>
+            {FILTERS.map(f => (
               <button
-                key={s}
-                className={styles.statusBtn}
-                onClick={() => onStatusChange(r.request_id, s)}
+                key={f.key}
+                className={`${styles.filterTab} ${filter === f.key ? styles.filterTabActive : ""}`}
+                onClick={() => setFilter(f.key)}
               >
-                Mark {STATUS_LABEL[s]}
+                {f.label}
               </button>
             ))}
           </div>
-        )}
+
+          {requests.length === 0 && (
+            <div className={styles.empty}>No requests yet — waiting for patients.</div>
+          )}
+
+          {filteredActive.length > 0 && (<>
+            <div className={styles.section}>Active</div>
+            <div className={styles.list}>
+              {filteredActive.map(r => (
+                <Card key={r.request_id} r={r} highlight={highlighted.current.has(r.request_id)} onChange={changeStatus} />
+              ))}
+            </div>
+          </>)}
+
+          {filter === "all" && resolved.length > 0 && (<>
+            <div className={styles.section}>Resolved</div>
+            <div className={styles.list}>
+              {resolved.map(r => (
+                <Card key={r.request_id} r={r} highlight={false} onChange={changeStatus} />
+              ))}
+            </div>
+          </>)}
+
+        </div>
+      </div>
+
+    </div>
+  );
+}
+
+function Card({ r, highlight, onChange }: {
+  r: CareRequest;
+  highlight: boolean;
+  onChange: (id: string, s: Status) => void;
+}) {
+  const cls = [
+    styles.card,
+    URGENCY_BORDER[r.urgency],
+    r.status === "resolved" ? styles.cardResolved : "",
+    highlight ? styles.cardHighlight : "",
+  ].filter(Boolean).join(" ");
+
+  return (
+    <div className={cls}>
+      <div className={styles.cardTop}>
+        <span>
+          <span className={styles.patientName}>{r.patient_name}</span>
+          <span className={styles.room}> · Rm {r.room_number}</span>
+        </span>
+        <div className={styles.tags}>
+          <span className={`${styles.tag} ${URGENCY_TAG[r.urgency]}`}>{URGENCY_LABEL[r.urgency]}</span>
+          <span className={styles.tagCategory}>{CATEGORY_LABEL[r.category] ?? r.category}</span>
+        </div>
+      </div>
+
+      <p className={styles.summary}>{r.summary}</p>
+      <p className={styles.quote}>&ldquo;{r.transcript}&rdquo;</p>
+      <p className={styles.action}>→ {r.suggested_action}</p>
+
+      {r.patient_context && (
+        <div className={styles.context}>{r.patient_context}</div>
+      )}
+
+      <div className={styles.cardBottom}>
+        <span className={styles.timestamp}>{fmt(r.created_at)}</span>
+        <div className={styles.cardFooter}>
+          <span className={`${styles.statusPill} ${STATUS_PILL[r.status]}`}>
+            {STATUS_LABEL[r.status]}
+          </span>
+          {NEXT[r.status].length > 0 && (
+            <div className={styles.statusActions}>
+              {NEXT[r.status].map(s => (
+                <button key={s} className={styles.statusBtn} onClick={() => onChange(r.request_id, s)}>
+                  {STATUS_LABEL[s]}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

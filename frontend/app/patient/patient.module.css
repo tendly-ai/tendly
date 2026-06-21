@@ -1,386 +1,479 @@
-/* Patient Voice Interface — elderly-friendly, high-contrast, single-screen */
+/* Patient Portal — split layout */
 
-.container {
-  min-height: 100vh;
+.page {
+  display: flex;
+  min-height: calc(100vh - 52px);
+}
+
+/* ── Left dark panel ─────────────────────── */
+.leftPanel {
+  width: 38%;
+  background: #09090b;
+  background-image: radial-gradient(circle at 1px 1px, rgba(255,255,255,0.07) 1px, transparent 0);
+  background-size: 28px 28px;
+  display: flex;
+  flex-direction: column;
+  padding: 40px 36px 36px;
+  gap: 0;
+  overflow-y: auto;
+}
+
+.panelTop {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-bottom: 28px;
+}
+
+.bigAvatar {
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  background: #7c3aed;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: 0.3px;
+  margin-bottom: 4px;
+}
+
+.panelName {
+  font-size: 26px;
+  font-weight: 700;
+  color: #ffffff;
+  letter-spacing: -0.5px;
+  line-height: 1.15;
+}
+
+.panelGreeting {
+  font-size: 13px;
+  color: #71717a;
+  margin-bottom: 2px;
+}
+
+.panelDate {
+  font-size: 12px;
+  color: #52525b;
+  margin-top: 2px;
+}
+
+.panelDivider {
+  height: 1px;
+  background: rgba(255,255,255,0.07);
+  margin: 4px 0 24px;
+}
+
+/* ── Panel sections ──────────────────────── */
+.panelSection {
+  padding-bottom: 24px;
+}
+
+.panelSectionLabel {
+  font-size: 10.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.7px;
+  color: #3f3f46;
+  margin-bottom: 12px;
+}
+
+/* ── Care team in left panel ─────────────── */
+.teamList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.teamRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.teamAvatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  color: #fff;
+  flex-shrink: 0;
+}
+
+.teamName {
+  font-size: 13px;
+  font-weight: 500;
+  color: #d4d4d8;
+}
+
+.teamRole {
+  font-size: 11px;
+  color: #71717a;
+  margin-top: 1px;
+}
+
+/* ── Recent activity in left panel ──────── */
+.activityList {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.activityItem {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.activityMeta {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.activityDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.activitySummary {
+  font-size: 12.5px;
+  color: #a1a1aa;
+  line-height: 1.4;
+  flex: 1;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.activityFooter {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-left: 13px;
+}
+
+.activityTime {
+  font-size: 11px;
+  color: #52525b;
+}
+
+.activityPill {
+  font-size: 10px;
+  font-weight: 600;
+  border-radius: 4px;
+  padding: 1px 6px;
+}
+
+.activityEmpty {
+  font-size: 12.5px;
+  color: #52525b;
+}
+
+/* ── Right light panel ───────────────────── */
+.rightPanel {
+  flex: 1;
+  background: #fafafa;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 24px;
+  overflow-y: auto;
+}
+
+/* ── Action card ─────────────────────────── */
+.actionCard {
+  width: 100%;
+  max-width: 380px;
+  background: #ffffff;
+  border: 1px solid #e4e4e7;
+  border-radius: 20px;
+  padding: 40px 36px 36px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.04), 0 8px 32px rgba(0,0,0,0.05);
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
-  padding: 24px;
-  transition: background 0.5s ease;
-}
-
-.containerIdle {
-  background: linear-gradient(150deg, #dbeafe 0%, #ede9fe 50%, #fce7f3 100%);
-}
-
-.containerRecording {
-  background: linear-gradient(150deg, #fef2f2 0%, #fde8e8 100%);
-}
-
-.containerProcessing {
-  background: linear-gradient(150deg, #f1f5f9 0%, #e2e8f0 100%);
-}
-
-.containerConfirm {
-  background: linear-gradient(150deg, #fffbeb 0%, #fef3c7 100%);
-}
-
-.containerConfirmed {
-  background: linear-gradient(150deg, #d1fae5 0%, #dcfce7 100%);
-}
-
-.containerError {
-  background: linear-gradient(150deg, #fef2f2 0%, #fee2e2 100%);
-}
-
-.card {
-  max-width: 520px;
-  width: 100%;
   text-align: center;
-  padding: 48px 32px 40px;
-  background: rgba(255, 255, 255, 0.72);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.6);
-  border-radius: 28px;
-  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.10), 0 1px 4px rgba(0, 0, 0, 0.06);
 }
 
-.title {
-  font-size: 30px;
-  font-weight: 800;
-  color: #0f172a;
-  margin: 0 0 8px;
-  letter-spacing: -0.5px;
+.cardPrompt {
+  font-size: 13px;
+  font-weight: 600;
+  color: #a1a1aa;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  margin: 0 0 24px;
 }
 
-.subtitle {
-  font-size: 18px;
-  color: #64748b;
-  margin: 0 0 36px;
-  font-weight: 400;
-}
-
-/* ── Main talk button ──────────────────────────────── */
-.talkButton {
-  width: 172px;
-  height: 172px;
+/* ── Talk button ─────────────────────────── */
+.talkBtn {
+  width: 114px;
+  height: 114px;
   border-radius: 50%;
   border: none;
-  cursor: pointer;
+  background: #09090b;
+  color: #fff;
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  margin: 0 auto 28px;
-  transition: transform 0.15s ease, box-shadow 0.15s ease;
-  position: relative;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.16), 0 8px 28px rgba(0,0,0,0.1);
+  transition: transform 0.13s ease, box-shadow 0.13s ease;
+  margin-bottom: 16px;
 }
-
-.talkButton:active { transform: scale(0.95) !important; }
-
-.talkButtonIdle {
-  background: linear-gradient(145deg, #4f46e5 0%, #7c3aed 100%);
-  color: white;
-  box-shadow:
-    0 6px 28px rgba(79, 70, 229, 0.45),
-    0 2px 8px rgba(79, 70, 229, 0.25),
-    inset 0 1px 0 rgba(255,255,255,0.15);
+.talkBtn:hover {
+  transform: scale(1.06);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.2), 0 12px 36px rgba(0,0,0,0.12);
 }
-.talkButtonIdle:hover {
-  transform: scale(1.05);
-  box-shadow:
-    0 10px 40px rgba(79, 70, 229, 0.55),
-    0 4px 12px rgba(79, 70, 229, 0.3),
-    inset 0 1px 0 rgba(255,255,255,0.15);
-}
+.talkBtn:active { transform: scale(0.95); }
 
-.talkButtonRecording {
-  background: linear-gradient(145deg, #dc2626 0%, #b91c1c 100%);
-  color: white;
+.talkBtnRec {
+  background: #ef4444;
+  box-shadow: 0 2px 8px rgba(239,68,68,0.3), 0 8px 28px rgba(239,68,68,0.15);
   animation: pulse 1.1s ease-in-out infinite;
-  box-shadow:
-    0 6px 28px rgba(220, 38, 38, 0.45),
-    inset 0 1px 0 rgba(255,255,255,0.15);
+}
+.talkBtnRec:hover {
+  box-shadow: 0 4px 16px rgba(239,68,68,0.4), 0 12px 36px rgba(239,68,68,0.2);
 }
 
 @keyframes pulse {
-  0%, 100% {
-    transform: scale(1);
-    box-shadow: 0 6px 28px rgba(220, 38, 38, 0.4), inset 0 1px 0 rgba(255,255,255,0.15);
-  }
-  50% {
-    transform: scale(1.07);
-    box-shadow: 0 10px 44px rgba(220, 38, 38, 0.6), inset 0 1px 0 rgba(255,255,255,0.15);
-  }
+  0%,100% { transform: scale(1); }
+  50%      { transform: scale(1.07); }
 }
 
-.buttonIcon  { font-size: 52px; line-height: 1; }
-.buttonLabel { font-size: 16px; font-weight: 700; letter-spacing: -0.1px; }
+.talkHint {
+  font-size: 14px;
+  font-weight: 500;
+  color: #71717a;
+  margin: 0 0 16px;
+}
 
-/* ── Status / waveform ─────────────────────────────── */
-.statusLabel {
-  font-size: 20px;
-  font-weight: 700;
-  margin: 0 0 12px;
-  min-height: 28px;
-  letter-spacing: -0.2px;
+/* ── Type fallback ───────────────────────── */
+.typeToggle {
+  font-size: 13px;
+  color: #a1a1aa;
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  padding: 4px;
+  transition: color 0.1s;
+}
+.typeToggle:hover { color: #71717a; }
+
+.textArea {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.textInput {
+  width: 100%;
+  font-size: 14px;
+  font-family: inherit;
+  padding: 10px 12px;
+  border-radius: 9px;
+  border: 1px solid #e4e4e7;
+  background: #fafafa;
+  color: #09090b;
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+  box-sizing: border-box;
+}
+.textInput:focus {
+  border-color: #a1a1aa;
+  box-shadow: 0 0 0 3px rgba(0,0,0,0.04);
+  background: #fff;
+}
+.textInput::placeholder { color: #a1a1aa; }
+
+.sendBtn {
+  align-self: flex-end;
+  padding: 8px 18px;
+  font-size: 13px;
+  font-weight: 600;
+  background: #09090b;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: opacity 0.12s;
+}
+.sendBtn:disabled { opacity: 0.3; cursor: not-allowed; }
+.sendBtn:not(:disabled):hover { opacity: 0.8; }
+
+/* ── Recording ───────────────────────────── */
+.recordingLabel {
+  font-size: 13px;
+  font-weight: 600;
+  color: #ef4444;
+  letter-spacing: 0.2px;
+  margin: 0 0 16px;
 }
 
 .waveform {
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 6px;
+  gap: 3px;
+  height: 28px;
   margin-bottom: 20px;
-  height: 40px;
 }
-
 .waveDot {
-  width: 7px;
-  border-radius: 4px;
-  background: #dc2626;
-  animation: wave 0.9s ease-in-out infinite;
+  width: 4px;
+  border-radius: 2px;
+  background: #ef4444;
+  animation: wave 0.85s ease-in-out infinite;
 }
-.waveDot:nth-child(1) { animation-delay: 0s;   }
-.waveDot:nth-child(2) { animation-delay: .12s; }
-.waveDot:nth-child(3) { animation-delay: .22s; }
-.waveDot:nth-child(4) { animation-delay: .32s; }
-.waveDot:nth-child(5) { animation-delay: .22s; }
-.waveDot:nth-child(6) { animation-delay: .12s; }
-.waveDot:nth-child(7) { animation-delay: 0s;   }
-
+.waveDot:nth-child(1){animation-delay:0s}
+.waveDot:nth-child(2){animation-delay:.1s}
+.waveDot:nth-child(3){animation-delay:.2s}
+.waveDot:nth-child(4){animation-delay:.3s}
+.waveDot:nth-child(5){animation-delay:.2s}
+.waveDot:nth-child(6){animation-delay:.1s}
+.waveDot:nth-child(7){animation-delay:0s}
 @keyframes wave {
-  0%, 100% { height: 10px; }
-  50%       { height: 34px; }
+  0%,100% { height: 5px; }
+  50%      { height: 24px; }
 }
 
-/* ── Spinner ───────────────────────────────────────── */
+/* ── Processing ──────────────────────────── */
 .spinner {
-  width: 52px;
-  height: 52px;
-  border: 5px solid rgba(0,0,0,0.08);
-  border-top-color: #4f46e5;
+  width: 36px;
+  height: 36px;
+  border: 3px solid #e4e4e7;
+  border-top-color: #09090b;
   border-radius: 50%;
-  animation: spin 0.75s linear infinite;
-  margin: 0 auto 16px;
+  animation: spin 0.7s linear infinite;
+  margin: 0 auto 14px;
 }
-
 @keyframes spin { to { transform: rotate(360deg); } }
 
-/* ── Transcript ────────────────────────────────────── */
-.transcript {
-  font-size: 18px;
-  color: #475569;
-  background: rgba(0,0,0,0.03);
-  border: 1px solid rgba(0,0,0,0.07);
-  border-left: 4px solid #4f46e5;
-  border-radius: 0 12px 12px 0;
-  padding: 14px 18px;
-  margin: 12px 0 20px;
+.processingLabel {
+  font-size: 13px;
+  color: #71717a;
+  margin: 0;
+}
+
+/* ── Response states ─────────────────────── */
+.quoteText {
+  font-size: 13px;
+  color: #71717a;
   font-style: italic;
+  background: #fafafa;
+  border: 1px solid #e4e4e7;
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin: 0 0 14px;
   text-align: left;
-  line-height: 1.45;
+  line-height: 1.5;
+  width: 100%;
+  box-sizing: border-box;
 }
 
-/* ── Message text ──────────────────────────────────── */
-.messageText {
-  font-size: 22px;
-  font-weight: 600;
-  color: #0f172a;
-  margin: 0 0 20px;
-  line-height: 1.45;
-  letter-spacing: -0.2px;
+.responseMsg {
+  font-size: 15px;
+  font-weight: 500;
+  color: #09090b;
+  line-height: 1.55;
+  margin: 0 0 18px;
 }
-.messageTextSuccess { color: #15803d; }
-.messageTextError   { color: #b91c1c; }
+.responseMsgOk  { color: #16a34a; }
+.responseMsgErr { color: #dc2626; }
 
-/* ── Confirm buttons ───────────────────────────────── */
-.confirmButtons {
+.checkmark {
+  font-size: 28px;
+  color: #16a34a;
+  margin-bottom: 12px;
+}
+
+.confirmRow {
   display: flex;
-  gap: 16px;
-  justify-content: center;
-  margin-top: 28px;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
 }
 
 .confirmYes {
-  padding: 20px 48px;
-  font-size: 22px;
-  font-weight: 800;
-  background: linear-gradient(145deg, #16a34a 0%, #15803d 100%);
-  color: white;
+  width: 100%;
+  padding: 11px;
+  font-size: 14px;
+  font-weight: 600;
+  background: #09090b;
+  color: #fff;
   border: none;
-  border-radius: 18px;
+  border-radius: 10px;
   cursor: pointer;
-  min-width: 130px;
-  box-shadow: 0 4px 16px rgba(22,163,74,0.35);
-  transition: transform 0.1s ease, box-shadow 0.1s ease;
+  transition: opacity 0.12s;
 }
-.confirmYes:hover { transform: scale(1.04); box-shadow: 0 6px 24px rgba(22,163,74,0.45); }
-.confirmYes:active { transform: scale(0.97); }
+.confirmYes:hover { opacity: 0.82; }
 
 .confirmNo {
-  padding: 20px 48px;
-  font-size: 22px;
-  font-weight: 800;
-  background: linear-gradient(145deg, #dc2626 0%, #b91c1c 100%);
-  color: white;
-  border: none;
-  border-radius: 18px;
-  cursor: pointer;
-  min-width: 130px;
-  box-shadow: 0 4px 16px rgba(220,38,38,0.35);
-  transition: transform 0.1s ease, box-shadow 0.1s ease;
-}
-.confirmNo:hover { transform: scale(1.04); box-shadow: 0 6px 24px rgba(220,38,38,0.45); }
-.confirmNo:active { transform: scale(0.97); }
-
-/* ── Action / retry buttons ────────────────────────── */
-.actionButton {
-  padding: 18px 40px;
-  font-size: 20px;
-  font-weight: 700;
-  background: linear-gradient(145deg, #4f46e5 0%, #4338ca 100%);
-  color: white;
-  border: none;
-  border-radius: 16px;
-  cursor: pointer;
-  margin-top: 8px;
-  box-shadow: 0 4px 16px rgba(79,70,229,0.35);
-  transition: transform 0.1s ease, box-shadow 0.1s ease;
-}
-.actionButton:hover { transform: scale(1.04); box-shadow: 0 6px 24px rgba(79,70,229,0.45); }
-.actionButton:active { transform: scale(0.97); }
-
-.retryButton {
-  composes: actionButton;
-  background: linear-gradient(145deg, #ea580c 0%, #c2410c 100%);
-  box-shadow: 0 4px 16px rgba(234,88,12,0.35);
-}
-
-/* ── Replay / speech ───────────────────────────────── */
-.replayButton {
-  padding: 12px 24px;
-  font-size: 17px;
-  font-weight: 600;
-  background: white;
-  color: #4f46e5;
-  border: 2px solid #c7d2fe;
-  border-radius: 14px;
-  cursor: pointer;
-  margin: 0 0 12px;
-  transition: transform 0.1s ease, border-color 0.1s ease, background 0.1s ease;
-}
-.replayButton:hover {
-  transform: scale(1.03);
-  border-color: #818cf8;
-  background: #eef2ff;
-}
-.replayButton:active { transform: scale(0.98); }
-
-.speechNote {
-  font-size: 15px;
-  color: #94a3b8;
-  margin: -6px 0 12px;
-}
-
-/* ── Text fallback ─────────────────────────────────── */
-.fallbackToggle {
-  font-size: 16px;
-  color: #94a3b8;
-  background: none;
-  border: none;
-  cursor: pointer;
-  text-decoration: underline;
-  text-underline-offset: 3px;
-  margin-top: 14px;
-  padding: 6px;
-  transition: color 0.1s ease;
-}
-.fallbackToggle:hover { color: #64748b; }
-
-.textInputArea {
-  margin-top: 16px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 12px;
-}
-
-.textInput {
-  font-size: 20px;
-  padding: 14px 18px;
   width: 100%;
-  max-width: 400px;
-  border-radius: 14px;
-  border: 2px solid #e2e8f0;
-  outline: none;
-  color: #0f172a;
-  background: white;
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
-}
-.textInput:focus {
-  border-color: #4f46e5;
-  box-shadow: 0 0 0 3px rgba(79,70,229,0.12);
-}
-
-.textSubmit {
-  padding: 14px 36px;
-  font-size: 20px;
-  font-weight: 700;
-  background: linear-gradient(145deg, #4f46e5 0%, #4338ca 100%);
-  color: white;
-  border: none;
-  border-radius: 14px;
-  cursor: pointer;
-  box-shadow: 0 4px 16px rgba(79,70,229,0.3);
-  transition: transform 0.1s ease;
-}
-.textSubmit:hover  { transform: scale(1.04); }
-.textSubmit:active { transform: scale(0.97); }
-.textSubmit:disabled {
-  background: #c7d2fe;
-  color: white;
-  cursor: not-allowed;
-  transform: none;
-  box-shadow: none;
-}
-
-/* ── Patient selector ──────────────────────────────── */
-.patientSelector {
-  position: absolute;
-  top: 16px;
-  right: 20px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.patientLabel {
+  padding: 10px;
   font-size: 14px;
-  color: #94a3b8;
   font-weight: 500;
-}
-
-.patientSelect {
-  font-size: 14px;
-  padding: 6px 10px;
+  background: transparent;
+  color: #71717a;
+  border: 1px solid #e4e4e7;
   border-radius: 10px;
-  border: 1.5px solid #e2e8f0;
-  background: white;
-  color: #0f172a;
   cursor: pointer;
-  outline: none;
-  transition: border-color 0.15s;
+  transition: background 0.12s, color 0.12s;
 }
-.patientSelect:focus { border-color: #4f46e5; }
+.confirmNo:hover { background: #fafafa; color: #09090b; }
 
-/* ── Checkmark ─────────────────────────────────────── */
-.checkmark {
-  font-size: 60px;
+.replayBtn {
+  font-size: 12px;
+  font-weight: 500;
+  color: #71717a;
+  background: none;
+  border: 1px solid #e4e4e7;
+  border-radius: 6px;
+  padding: 5px 12px;
   margin-bottom: 12px;
-  line-height: 1;
-  display: block;
+  cursor: pointer;
+  transition: border-color 0.12s, color 0.12s;
 }
+.replayBtn:hover { border-color: #a1a1aa; color: #09090b; }
+
+.speechNote { font-size: 12px; color: #a1a1aa; margin-bottom: 10px; }
+
+.newReqBtn {
+  width: 100%;
+  margin-top: 4px;
+  padding: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  background: #09090b;
+  color: #fff;
+  border: none;
+  border-radius: 9px;
+  cursor: pointer;
+  transition: opacity 0.12s;
+}
+.newReqBtn:hover { opacity: 0.82; }
+
+.retryBtn {
+  width: 100%;
+  padding: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  background: transparent;
+  color: #dc2626;
+  border: 1px solid #fca5a5;
+  border-radius: 9px;
+  cursor: pointer;
+  transition: background 0.12s;
+}
+.retryBtn:hover { background: #fef2f2; }

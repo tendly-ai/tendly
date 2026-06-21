@@ -8,57 +8,66 @@
     * { box-sizing: border-box; margin: 0; padding: 0; }
 
     body {
-      font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Rounded', sans-serif;
+      font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'SF Pro Text', sans-serif;
       background: transparent;
       overflow: hidden;
       -webkit-app-region: no-drag;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    html, body {
+      background: #09090b;
     }
 
     .shell {
-      margin: 8px;
-      background: rgba(32, 32, 36, 0.90);
-      border: 1px solid rgba(255,255,255,0.09);
-      border-radius: 18px;
-      box-shadow: 0 8px 32px rgba(0,0,0,0.45);
+      background: #09090b;
+      background-image: radial-gradient(circle at 1px 1px, rgba(255,255,255,0.06) 1px, transparent 0);
+      background-size: 24px 24px;
+      border-bottom: 1px solid rgba(255,255,255,0.07);
       display: flex;
       flex-direction: column;
       align-items: center;
-      justify-content: center;
-      padding: 20px 16px;
+      padding: 20px 16px 18px;
       gap: 0;
     }
 
-    /* ── Idle: just the button ── */
+    /* ── Talk button ── */
     #btn-talk {
-      width: 76px;
-      height: 76px;
+      width: 80px;
+      height: 80px;
       border-radius: 50%;
       border: none;
       cursor: pointer;
       display: flex;
-      flex-direction: column;
       align-items: center;
       justify-content: center;
-      gap: 3px;
-      background: linear-gradient(145deg, #4f46e5, #7c3aed);
-      box-shadow: 0 4px 18px rgba(79,70,229,0.5);
-      transition: transform .13s ease, box-shadow .13s ease;
+      background: #18181b;
+      border: 1px solid rgba(255,255,255,0.1);
+      box-shadow: 0 2px 8px rgba(0,0,0,0.4), 0 6px 20px rgba(0,0,0,0.25);
+      transition: transform .13s ease, box-shadow .13s ease, background .15s ease;
       color: white;
     }
-    #btn-talk:hover  { transform: scale(1.07); box-shadow: 0 6px 24px rgba(79,70,229,0.65); }
-    #btn-talk:active { transform: scale(0.93); }
-    #btn-talk.recording {
-      background: linear-gradient(145deg, #dc2626, #b91c1c);
-      box-shadow: 0 4px 18px rgba(220,38,38,0.5);
-      animation: pulse 1s ease-in-out infinite;
+    #btn-talk:hover {
+      transform: scale(1.06);
+      background: #27272a;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.5), 0 10px 28px rgba(0,0,0,0.3);
     }
-    @keyframes pulse {
-      0%,100% { transform:scale(1);    box-shadow:0 4px 18px rgba(220,38,38,.5); }
-      50%      { transform:scale(1.08); box-shadow:0 6px 26px rgba(220,38,38,.7); }
+    #btn-talk:active { transform: scale(0.94); }
+
+    #btn-talk.recording {
+      background: #ef4444;
+      border-color: rgba(255,255,255,0.1);
+      box-shadow: 0 2px 8px rgba(239,68,68,0.35), 0 6px 20px rgba(239,68,68,0.2);
+      animation: pulse 1.1s ease-in-out infinite;
+    }
+    #btn-talk.recording:hover {
+      box-shadow: 0 4px 16px rgba(239,68,68,0.5), 0 10px 28px rgba(239,68,68,0.3);
     }
 
-    .btn-icon  { font-size: 28px; line-height: 1; }
-    .btn-label { font-size: 9px; font-weight: 700; letter-spacing: .5px; text-transform: uppercase; opacity: .85; }
+    @keyframes pulse {
+      0%,100% { transform: scale(1); }
+      50%      { transform: scale(1.07); }
+    }
 
     /* ── Waveform (recording) ── */
     .waveform {
@@ -70,8 +79,9 @@
     }
     .waveform.active { display: flex; }
     .bar {
-      width: 4px; border-radius: 2px;
-      background: #dc2626;
+      width: 3px;
+      border-radius: 2px;
+      background: #ef4444;
       animation: wave .85s ease-in-out infinite;
     }
     .bar:nth-child(1){animation-delay:0s}
@@ -81,14 +91,27 @@
     .bar:nth-child(5){animation-delay:.2s}
     .bar:nth-child(6){animation-delay:.1s}
     .bar:nth-child(7){animation-delay:0s}
-    @keyframes wave { 0%,100%{height:5px} 50%{height:22px} }
+    @keyframes wave { 0%,100%{height:4px} 50%{height:20px} }
+
+    /* ── Hint text ── */
+    .hint {
+      font-size: 10.5px;
+      font-weight: 500;
+      color: rgba(255,255,255,0.3);
+      letter-spacing: 0.2px;
+      margin-top: 10px;
+      text-align: center;
+    }
+    .hint.recording { color: #ef4444; }
+    .hint.processing { color: rgba(255,255,255,0.3); }
 
     /* ── Spinner (processing) ── */
     .spinner {
       display: none;
-      width: 26px; height: 26px;
-      border: 3px solid rgba(255,255,255,.12);
-      border-top-color: #a78bfa;
+      width: 24px;
+      height: 24px;
+      border: 2px solid rgba(255,255,255,0.1);
+      border-top-color: rgba(255,255,255,0.6);
       border-radius: 50%;
       animation: spin .7s linear infinite;
       margin-top: 12px;
@@ -109,45 +132,59 @@
 
     .resp-msg {
       font-size: 11.5px;
-      color: rgba(255,255,255,.82);
+      font-weight: 400;
+      color: rgba(255,255,255,0.7);
       text-align: center;
-      line-height: 1.45;
+      line-height: 1.5;
+      padding: 0 4px;
     }
     .resp-msg.ok    { color: #86efac; }
     .resp-msg.error { color: #fca5a5; }
 
-    .confirm-row { display: flex; gap: 8px; }
+    .divider {
+      width: 100%;
+      height: 1px;
+      background: rgba(255,255,255,0.06);
+      margin: 2px 0;
+    }
+
+    .confirm-row { display: flex; gap: 6px; width: 100%; }
     .btn-y, .btn-n {
       flex: 1;
       padding: 7px 0;
-      font-size: 13px;
-      font-weight: 700;
+      font-size: 12px;
+      font-weight: 600;
+      font-family: inherit;
       border: none;
-      border-radius: 10px;
+      border-radius: 9px;
       cursor: pointer;
-      min-width: 54px;
+      transition: opacity 0.12s;
     }
-    .btn-y { background:#16a34a; color:#fff; }
-    .btn-n { background:#dc2626; color:#fff; }
+    .btn-y { background: #16a34a; color: #fff; }
+    .btn-y:hover { opacity: 0.85; }
+    .btn-n { background: #18181b; color: rgba(255,255,255,0.6); border: 1px solid rgba(255,255,255,0.1); }
+    .btn-n:hover { background: #27272a; }
 
     .btn-reset {
       font-size: 10px;
-      color: rgba(255,255,255,.38);
+      font-family: inherit;
+      color: rgba(255,255,255,0.25);
       background: none;
       border: none;
       cursor: pointer;
       text-decoration: underline;
       text-underline-offset: 2px;
       padding: 2px;
+      transition: color 0.12s;
     }
+    .btn-reset:hover { color: rgba(255,255,255,0.5); }
   </style>
 </head>
 <body>
 <div class="shell" id="shell">
 
   <button id="btn-talk" aria-label="Talk to your AI caregiver">
-    <span class="btn-icon">🎙</span>
-    <span class="btn-label">Talk</span>
+    <!-- icon injected by JS -->
   </button>
 
   <div class="waveform" id="waveform">
@@ -158,11 +195,14 @@
 
   <div class="spinner" id="spinner"></div>
 
+  <p class="hint" id="hint">Talk to your caregiver</p>
+
   <div class="response" id="response">
+    <div class="divider"></div>
     <p class="resp-msg" id="resp-msg"></p>
     <div class="confirm-row" id="confirm-row" style="display:none">
-      <button class="btn-y" id="btn-y">Yes</button>
-      <button class="btn-n" id="btn-n">No</button>
+      <button class="btn-y" id="btn-y">Yes, go ahead</button>
+      <button class="btn-n" id="btn-n">Cancel</button>
     </div>
     <button class="btn-reset" id="btn-reset">new request</button>
   </div>
@@ -173,9 +213,13 @@
 const BACKEND = 'http://localhost:8000';
 const DEFAULT_PATIENT = 'patient_001';
 
+const MIC_SVG = `<svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 1 3 3v7a3 3 0 0 1-6 0V5a3 3 0 0 1 3-3z"/><path d="M19 10v1a7 7 0 0 1-14 0v-1"/><line x1="12" y1="19" x2="12" y2="22"/><line x1="8" y1="22" x2="16" y2="22"/></svg>`;
+const STOP_SVG = `<svg width="24" height="24" viewBox="0 0 24 24" fill="white"><rect x="5" y="5" width="14" height="14" rx="2.5"/></svg>`;
+
 const talkBtn   = document.getElementById('btn-talk');
 const waveform  = document.getElementById('waveform');
 const spinner   = document.getElementById('spinner');
+const hint      = document.getElementById('hint');
 const response  = document.getElementById('response');
 const respMsg   = document.getElementById('resp-msg');
 const confirmRow= document.getElementById('confirm-row');
@@ -194,13 +238,16 @@ function resize() {
 }
 
 function setMode(mode) {
-  // idle | recording | processing | response
   talkBtn.className = mode === 'recording' ? 'recording' : '';
-  talkBtn.querySelector('.btn-icon').textContent = mode === 'recording' ? '⏹' : '🎙';
-  talkBtn.querySelector('.btn-label').textContent = mode === 'recording' ? 'Stop' : 'Talk';
+  talkBtn.innerHTML = mode === 'recording' ? STOP_SVG : MIC_SVG;
   waveform.classList.toggle('active', mode === 'recording');
   spinner.classList.toggle('active',  mode === 'processing');
   response.classList.toggle('active', mode === 'response');
+
+  hint.style.display = (mode === 'processing' || mode === 'response') ? 'none' : 'block';
+  hint.className = 'hint ' + (mode === 'recording' ? 'recording' : '');
+  hint.textContent = mode === 'recording' ? 'Listening…' : 'Talk to your caregiver';
+
   resize();
 }
 
