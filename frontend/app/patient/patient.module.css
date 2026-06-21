@@ -1,0 +1,336 @@
+/* Patient Voice Interface — elderly-friendly, high-contrast, single-screen */
+
+.container {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  transition: background-color 0.4s ease;
+}
+
+.containerIdle {
+  background-color: #e8f0fe;
+}
+
+.containerRecording {
+  background-color: #fde8e8;
+}
+
+.containerProcessing {
+  background-color: #f0f0f0;
+}
+
+.containerConfirm {
+  background-color: #fef9e7;
+}
+
+.containerConfirmed {
+  background-color: #e8f8e8;
+}
+
+.containerError {
+  background-color: #fde8e8;
+}
+
+.card {
+  max-width: 560px;
+  width: 100%;
+  text-align: center;
+  padding: 40px 24px;
+}
+
+.title {
+  font-size: 28px;
+  font-weight: 700;
+  color: #1a2233;
+  margin: 0 0 8px 0;
+}
+
+.subtitle {
+  font-size: 20px;
+  color: #475067;
+  margin: 0 0 40px 0;
+}
+
+/* Main talk button */
+.talkButton {
+  width: 180px;
+  height: 180px;
+  border-radius: 50%;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin: 0 auto 32px auto;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  box-shadow: 0 4px 24px rgba(37, 99, 235, 0.25);
+}
+
+.talkButton:hover {
+  transform: scale(1.05);
+  box-shadow: 0 6px 32px rgba(37, 99, 235, 0.35);
+}
+
+.talkButton:active {
+  transform: scale(0.97);
+}
+
+.talkButtonIdle {
+  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+  color: white;
+}
+
+.talkButtonRecording {
+  background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
+  color: white;
+  animation: pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { transform: scale(1); box-shadow: 0 4px 24px rgba(220, 38, 38, 0.3); }
+  50% { transform: scale(1.06); box-shadow: 0 6px 40px rgba(220, 38, 38, 0.5); }
+}
+
+.buttonIcon {
+  font-size: 48px;
+  line-height: 1;
+}
+
+.buttonLabel {
+  font-size: 20px;
+  font-weight: 600;
+}
+
+/* Status label below the button */
+.statusLabel {
+  font-size: 22px;
+  font-weight: 600;
+  margin: 0 0 16px 0;
+  min-height: 30px;
+}
+
+/* Waveform dots for recording state */
+.waveform {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin-bottom: 24px;
+  height: 40px;
+}
+
+.waveDot {
+  width: 8px;
+  border-radius: 4px;
+  background: #dc2626;
+  animation: wave 1s ease-in-out infinite;
+}
+
+.waveDot:nth-child(1) { animation-delay: 0s; }
+.waveDot:nth-child(2) { animation-delay: 0.1s; }
+.waveDot:nth-child(3) { animation-delay: 0.2s; }
+.waveDot:nth-child(4) { animation-delay: 0.3s; }
+.waveDot:nth-child(5) { animation-delay: 0.4s; }
+.waveDot:nth-child(6) { animation-delay: 0.5s; }
+.waveDot:nth-child(7) { animation-delay: 0.6s; }
+
+@keyframes wave {
+  0%, 100% { height: 12px; }
+  50% { height: 36px; }
+}
+
+/* Spinner for processing state */
+.spinner {
+  width: 56px;
+  height: 56px;
+  border: 5px solid #d1d5db;
+  border-top-color: #2563eb;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  margin: 0 auto 16px auto;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Transcript display */
+.transcript {
+  font-size: 20px;
+  color: #374151;
+  background: #f9fafb;
+  border-radius: 12px;
+  padding: 16px 20px;
+  margin: 16px 0 24px 0;
+  font-style: italic;
+  border: 1px solid #e5e7eb;
+}
+
+/* Message text for confirmed/error states */
+.messageText {
+  font-size: 24px;
+  font-weight: 600;
+  color: #1a2233;
+  margin: 0 0 24px 0;
+  line-height: 1.4;
+}
+
+.messageTextSuccess {
+  color: #15803d;
+}
+
+.messageTextError {
+  color: #b91c1c;
+}
+
+/* Confirm/action buttons */
+.confirmButtons {
+  display: flex;
+  gap: 20px;
+  justify-content: center;
+  margin-top: 32px;
+}
+
+.confirmYes {
+  padding: 20px 48px;
+  font-size: 24px;
+  font-weight: 700;
+  background: #16a34a;
+  color: white;
+  border: none;
+  border-radius: 16px;
+  cursor: pointer;
+  min-width: 140px;
+  transition: transform 0.1s ease;
+}
+
+.confirmYes:hover { transform: scale(1.04); }
+.confirmYes:active { transform: scale(0.97); }
+
+.confirmNo {
+  padding: 20px 48px;
+  font-size: 24px;
+  font-weight: 700;
+  background: #dc2626;
+  color: white;
+  border: none;
+  border-radius: 16px;
+  cursor: pointer;
+  min-width: 140px;
+  transition: transform 0.1s ease;
+}
+
+.confirmNo:hover { transform: scale(1.04); }
+.confirmNo:active { transform: scale(0.97); }
+
+/* Done / Try Again / New Request button */
+.actionButton {
+  padding: 18px 40px;
+  font-size: 22px;
+  font-weight: 600;
+  background: #2563eb;
+  color: white;
+  border: none;
+  border-radius: 14px;
+  cursor: pointer;
+  margin-top: 8px;
+  transition: transform 0.1s ease;
+}
+
+.actionButton:hover { transform: scale(1.04); }
+.actionButton:active { transform: scale(0.97); }
+
+.retryButton {
+  composes: actionButton;
+  background: #ea580c;
+}
+
+/* Text input fallback area */
+.fallbackToggle {
+  font-size: 18px;
+  color: #6b7280;
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-decoration: underline;
+  margin-top: 16px;
+  padding: 8px;
+}
+
+.textInputArea {
+  margin-top: 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.textInput {
+  font-size: 22px;
+  padding: 14px 18px;
+  width: 100%;
+  max-width: 420px;
+  border-radius: 12px;
+  border: 2px solid #cbd5e1;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.textInput:focus {
+  border-color: #2563eb;
+}
+
+.textSubmit {
+  padding: 14px 36px;
+  font-size: 22px;
+  font-weight: 600;
+  background: #2563eb;
+  color: white;
+  border: none;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: transform 0.1s ease;
+}
+
+.textSubmit:hover { transform: scale(1.04); }
+.textSubmit:active { transform: scale(0.97); }
+.textSubmit:disabled {
+  background: #93c5fd;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* Patient selector */
+.patientSelector {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.patientLabel {
+  font-size: 16px;
+  color: #6b7280;
+}
+
+.patientSelect {
+  font-size: 16px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid #d1d5db;
+  background: white;
+}
+
+/* Checkmark icon for confirmed */
+.checkmark {
+  font-size: 64px;
+  margin-bottom: 16px;
+  line-height: 1;
+}
