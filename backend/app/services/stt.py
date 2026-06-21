@@ -6,9 +6,12 @@ so the pipeline runs without audio.
 """
 from __future__ import annotations
 
+import logging
+
 from ..config import get_settings
 
 settings = get_settings()
+logger = logging.getLogger("tendly.stt")
 
 
 async def transcribe(audio_bytes: bytes, content_type: str = "audio/webm") -> str:
@@ -18,11 +21,24 @@ async def transcribe(audio_bytes: bytes, content_type: str = "audio/webm") -> st
             return "[mock transcript — Deepgram key not configured]"
         raise RuntimeError("DEEPGRAM_API_KEY not configured")
 
-    # Real implementation (Deepgram batch). Implemented by the voice feature.
     from deepgram import DeepgramClient, PrerecordedOptions  # type: ignore
 
-    client = DeepgramClient(settings.deepgram_api_key)
-    options = PrerecordedOptions(model="nova-2", smart_format=True)
-    source = {"buffer": audio_bytes, "mimetype": content_type}
-    resp = client.listen.prerecorded.v("1").transcribe_file(source, options)
-    return resp.results.channels[0].alternatives[0].transcript
+    try:
+        client = DeepgramClient(settings.deepgram_api_key)
+        options = PrerecordedOptions(model="nova-2", smart_format=True)
+        source = {"buffer": audio_bytes, "mimetype": content_type}
+        resp = await client.listen.asyncprerecorded.v("1").transcribe_file(
+            source, options
+        )
+        transcript: str = (
+            resp.results.channels[0].alternatives[0].transcript
+        )
+        if not transcript:
+            logger.warning("Deepgram returned empty transcript")
+            return ""
+        return transcript
+    except Exception:
+        logger.exception("Deepgram transcription failed — falling back to mock")
+        if settings.allow_mocks:
+            return "[mock transcript — Deepgram call failed, using fallback]"
+        raise
