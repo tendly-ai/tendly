@@ -1,8 +1,16 @@
-"""Seed mock data: 3 patients + 2 caregivers (§5)."""
+"""Seed mock data: 3 patients + 2 caregivers (§5).
+
+Idempotent — only writes a profile if it does not already exist in the store
+(Redis or in-memory), so restarting the server never duplicates seed data.
+"""
 from __future__ import annotations
+
+import logging
 
 from .models import CaregiverProfile, FamilyContact, PatientProfile
 from .services import memory
+
+logger = logging.getLogger("tendly.seed")
 
 PATIENTS = [
     PatientProfile(
@@ -66,7 +74,16 @@ CAREGIVERS = [
 
 
 def seed() -> None:
+    """Seed patients and caregivers idempotently."""
     for p in PATIENTS:
-        memory.save_patient(p)
+        if memory.get_patient(p.patient_id) is None:
+            memory.save_patient(p)
+            logger.info("Seeded patient %s (%s)", p.patient_id, p.name)
+        else:
+            logger.debug("Patient %s already exists — skipping", p.patient_id)
     for c in CAREGIVERS:
-        memory.save_caregiver(c)
+        if memory.get_caregiver(c.caregiver_id) is None:
+            memory.save_caregiver(c)
+            logger.info("Seeded caregiver %s (%s)", c.caregiver_id, c.name)
+        else:
+            logger.debug("Caregiver %s already exists — skipping", c.caregiver_id)
