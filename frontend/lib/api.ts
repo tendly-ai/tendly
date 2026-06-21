@@ -55,7 +55,7 @@ export async function updateStatus(
 export async function confirmTask(
   requestId: string,
   confirmed: boolean
-): Promise<{ status: string; detail?: string }> {
+): Promise<{ status: string; detail?: string; spoken_response?: string }> {
   const res = await fetch(`${API_BASE}/api/tasks/confirm`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -63,6 +63,16 @@ export async function confirmTask(
   });
   if (!res.ok) throw new Error(`confirmTask failed: ${res.status}`);
   return res.json();
+}
+
+export async function synthesizeSpeech(text: string): Promise<Blob> {
+  const res = await fetch(`${API_BASE}/api/speech/synthesize`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ text }),
+  });
+  if (!res.ok) throw new Error(`synthesizeSpeech failed: ${res.status}`);
+  return res.blob();
 }
 
 export async function generateSummary(patientId: string): Promise<string> {

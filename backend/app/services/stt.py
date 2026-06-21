@@ -8,6 +8,8 @@ from __future__ import annotations
 
 import logging
 
+import httpx
+
 from ..config import get_settings
 
 settings = get_settings()
@@ -41,4 +43,35 @@ async def transcribe(audio_bytes: bytes, content_type: str = "audio/webm") -> st
         logger.exception("Deepgram transcription failed — falling back to mock")
         if settings.allow_mocks:
             return "[mock transcript — Deepgram call failed, using fallback]"
+        raise
+
+
+async def synthesize(text: str) -> bytes:
+    """Turn response text into speech audio using Deepgram TTS."""
+    clean_text = " ".join(text.split())
+    if not clean_text:
+        raise ValueError("text is required")
+
+    if not settings.deepgram_api_key:
+        if settings.allow_mocks:
+            return b""
+        raise RuntimeError("DEEPGRAM_API_KEY not configured")
+
+    try:
+        async with httpx.AsyncClient(timeout=20.0) as client:
+            resp = await client.post(
+                "https://api.deepgram.com/v1/speak",
+                params={"model": "aura-2-thalia-en", "encoding": "mp3"},
+                headers={
+                    "Authorization": f"Token {settings.deepgram_api_key}",
+                    "Content-Type": "application/json",
+                },
+                json={"text": clean_text},
+            )
+            resp.raise_for_status()
+            return resp.content
+    except Exception:
+        logger.exception("Deepgram TTS failed")
+        if settings.allow_mocks:
+            return b""
         raise

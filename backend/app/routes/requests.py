@@ -11,7 +11,7 @@ from ..models import (
     Status,
     UpdateStatusBody,
 )
-from ..services import automation, memory, observability, stt, triage
+from ..services import automation, memory, observability, stt, talkback, triage
 from ..ws import manager
 
 router = APIRouter(prefix="/api/requests", tags=["requests"])
@@ -49,15 +49,24 @@ async def _process(patient_id: str, transcript: str) -> CareRequest:
 
     # Automation routing (§3.4): automatable categories.
     if result.category in (Category.automated_task, Category.family_communication):
+        task_plan = automation.plan_task(req)
         req.confirmation_prompt = (
-            f"I'm about to: {automation.plan_task(req)} Is that okay?"
+            await talkback.confirmation(req, task_plan)
             if result.requires_confirmation else None
         )
         if result.requires_confirmation:
             req.task_state = "pending_confirmation"
+            req.spoken_response = req.confirmation_prompt
         else:
             res = await automation.run_task(req)
             req.task_state = res.get("status", "done")
+            req.spoken_response = (
+                await talkback.automation_done(req)
+                if req.task_state in ("done", "mocked")
+                else await talkback.automation_tried(req)
+            )
+    else:
+        req.spoken_response = await talkback.caregiver_notified(req)
 
     memory.save_request(req)
     await manager.broadcast("request.created", req.model_dump())

@@ -1,7 +1,12 @@
 "use client";
 
 import { useState, useRef, useCallback } from "react";
-import { createRequest, createRequestAudio, confirmTask } from "../../lib/api";
+import {
+  createRequest,
+  createRequestAudio,
+  confirmTask,
+  synthesizeSpeech,
+} from "../../lib/api";
 import type { CareRequest } from "../../lib/types";
 import styles from "./patient.module.css";
 
@@ -27,9 +32,13 @@ export default function PatientPage() {
   const [transcript, setTranscript] = useState("");
   const [showTextInput, setShowTextInput] = useState(false);
   const [textValue, setTextValue] = useState("");
+  const [speechReady, setSpeechReady] = useState(false);
+  const [speechFailed, setSpeechFailed] = useState(false);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const audioUrlRef = useRef<string | null>(null);
 
   const resetToIdle = useCallback(() => {
     setState("idle");
@@ -38,6 +47,42 @@ export default function PatientPage() {
     setTranscript("");
     setTextValue("");
     setShowTextInput(false);
+    setSpeechReady(false);
+    setSpeechFailed(false);
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current = null;
+    }
+    if (audioUrlRef.current) {
+      URL.revokeObjectURL(audioUrlRef.current);
+      audioUrlRef.current = null;
+    }
+  }, []);
+
+  const playTalkBack = useCallback(async (text: string) => {
+    const spoken = text.trim();
+    if (!spoken) return;
+
+    setSpeechReady(false);
+    setSpeechFailed(false);
+    try {
+      const audio = await synthesizeSpeech(spoken);
+      if (audioUrlRef.current) URL.revokeObjectURL(audioUrlRef.current);
+      const url = URL.createObjectURL(audio);
+      audioUrlRef.current = url;
+      const player = new Audio(url);
+      audioRef.current = player;
+      setSpeechReady(true);
+      await player.play();
+    } catch {
+      setSpeechFailed(true);
+    }
+  }, []);
+
+  const replayTalkBack = useCallback(() => {
+    if (!audioRef.current) return;
+    audioRef.current.currentTime = 0;
+    audioRef.current.play().catch(() => setSpeechFailed(true));
   }, []);
 
   /* ---- Audio recording ---- */
@@ -119,9 +164,13 @@ export default function PatientPage() {
     if (r.requires_confirmation && r.confirmation_prompt) {
       setMessage(r.confirmation_prompt);
       setState("confirm");
+      playTalkBack(r.spoken_response || r.confirmation_prompt);
     } else {
-      setMessage("Got it! A caregiver has been notified.");
+      const response =
+        r.spoken_response || "I hear you. I've passed that along for you.";
+      setMessage(response);
       setState("confirmed");
+      playTalkBack(response);
     }
   }
 
@@ -131,11 +180,15 @@ export default function PatientPage() {
     if (!req) return;
     setState("processing");
     try {
-      await confirmTask(req.request_id, ok);
-      setMessage(
-        ok ? "Opening that for you now." : "No problem, cancelled."
-      );
+      const result = await confirmTask(req.request_id, ok);
+      const response =
+        result.spoken_response ||
+        (ok
+          ? "Of course. I'll take care of that for you now."
+          : "No worries. I cancelled that for you.");
+      setMessage(response);
       setState("confirmed");
+      playTalkBack(response);
     } catch {
       setMessage("Sorry, something went wrong. Please try again.");
       setState("error");
@@ -277,6 +330,11 @@ export default function PatientPage() {
               </div>
             )}
             <p className={styles.messageText}>{message}</p>
+            <TalkBackControls
+              ready={speechReady}
+              failed={speechFailed}
+              onReplay={replayTalkBack}
+            />
             <div className={styles.confirmButtons}>
               <button
                 className={styles.confirmYes}
@@ -308,6 +366,11 @@ export default function PatientPage() {
             >
               {message}
             </p>
+            <TalkBackControls
+              ready={speechReady}
+              failed={speechFailed}
+              onReplay={replayTalkBack}
+            />
             <button className={styles.actionButton} onClick={resetToIdle}>
               New Request
             </button>
@@ -328,4 +391,26 @@ export default function PatientPage() {
       </div>
     </main>
   );
+}
+
+function TalkBackControls({
+  ready,
+  failed,
+  onReplay,
+}: {
+  ready: boolean;
+  failed: boolean;
+  onReplay: () => void;
+}) {
+  if (ready) {
+    return (
+      <button className={styles.replayButton} onClick={onReplay}>
+        Replay Voice
+      </button>
+    );
+  }
+  if (failed) {
+    return <p className={styles.speechNote}>Voice playback unavailable.</p>;
+  }
+  return null;
 }

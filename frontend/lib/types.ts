@@ -26,6 +26,7 @@ export interface CareRequest {
   patient_context: string;
   confirmation_prompt: string | null;
   task_state: string | null;
+  spoken_response: string | null;
 }
 
 export interface PatientProfile {

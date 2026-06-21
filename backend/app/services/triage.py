@@ -205,7 +205,9 @@ def _mock_triage(transcript: str) -> TriageResult:
             requires_confirmation=True,
             reasoning="Family-contact keyword detected (mock).",
         )
-    if has("email", "music", "play", "browse", "website", "open", "internet", "show", "tv channel"):
+    if has("email", "music", "play", "browse", "website", "open", "internet",
+           "show", "tv channel", "find", "search", "look up", "recipe",
+           "recipes", "linkedin"):
         return TriageResult(
             category=Category.automated_task, urgency=Urgency.low,
             summary="Patient wants help with a digital task.",

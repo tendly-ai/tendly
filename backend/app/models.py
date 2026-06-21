@@ -105,6 +105,7 @@ class CareRequest(BaseModel):
     # Automation bookkeeping (used by Simular flow)
     confirmation_prompt: Optional[str] = None
     task_state: Optional[str] = None  # e.g. pending_confirmation, running, done, cancelled
+    spoken_response: Optional[str] = None
 
 
 # ---- API request/response bodies ----
@@ -127,3 +128,7 @@ class GenerateSummaryBody(BaseModel):
     patient_id: str
     start_date: Optional[str] = None
     end_date: Optional[str] = None
+
+
+class SpeechBody(BaseModel):
+    text: str

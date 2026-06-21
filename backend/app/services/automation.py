@@ -20,10 +20,15 @@ Real vs Mocked:
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import os
+import re
+import sys
 import tempfile
+from dataclasses import dataclass
 from typing import Optional
+from urllib.parse import quote_plus, urlparse
 
 from ..config import get_settings
 from ..models import CareRequest, Category, FamilyContact, PatientProfile
@@ -43,6 +48,64 @@ _TASK_VIDEO_CALL = "video_call"
 _TASK_SEND_MESSAGE = "send_message"
 _TASK_OPEN_PORTAL = "open_portal"
 _TASK_GENERAL_NAV = "general_navigation"
+
+
+@dataclass
+class AutomationPlan:
+    action: str
+    target_url: str
+    description: str
+    search_query: str = ""
+    site: str = ""
+
+
+_KNOWN_SITE_URLS = {
+    "amazon": "https://www.amazon.com",
+    "cnn": "https://www.cnn.com",
+    "facebook": "https://www.facebook.com",
+    "gmail": "https://mail.google.com",
+    "google": "https://www.google.com",
+    "instagram": "https://www.instagram.com",
+    "linkedin": "https://www.linkedin.com",
+    "mail": "https://mail.google.com",
+    "mychart": "https://www.mychart.org",
+    "netflix": "https://www.netflix.com",
+    "nytimes": "https://www.nytimes.com",
+    "spotify": "https://open.spotify.com",
+    "weather": "https://weather.com",
+    "wikipedia": "https://www.wikipedia.org",
+    "youtube": "https://www.youtube.com",
+}
+
+
+AUTOMATION_PLANNER_PROMPT = """\
+You convert an elderly patient's digital request into one safe browser action.
+
+Return ONLY valid JSON with these keys:
+{
+  "action": "open_url" | "search_web" | "site_search",
+  "target_url": "https://...",
+  "search_query": "plain search query or empty string",
+  "site": "site name or empty string",
+  "description": "short first-person-friendly action description"
+}
+
+Rules:
+- For "open <known site/app>" requests, choose the official public URL, e.g.
+  LinkedIn -> https://www.linkedin.com.
+- For research/discovery requests like recipes, news, weather, or "find me...",
+  use action "search_web" with a concise query and target_url set to a Google
+  search URL for that query.
+- For requests like "go to LinkedIn and search Jane Smith", use action
+  "site_search", site "linkedin", search_query "Jane Smith", and target_url set
+  to that site's search-results URL. Prefer native site search URLs for
+  LinkedIn, YouTube, Amazon, Wikipedia, Google, Gmail, and Instagram when you
+  know them; otherwise use a Google site: search.
+- Do not invent private account URLs, click buttons, submit forms, buy things,
+  send messages, or enter personal data. If the request would need that, open
+  the relevant public site or search page only.
+- Use HTTPS URLs only, except mailto is allowed for explicit email compose tasks.
+"""
 
 
 def _classify_task(req: CareRequest) -> str:
@@ -66,7 +129,7 @@ def _classify_task(req: CareRequest) -> str:
         return _TASK_VIDEO_CALL
     if any(kw in t for kw in ("message", "text", "send")):
         return _TASK_SEND_MESSAGE
-    if any(kw in t for kw in ("browse", "website", "internet", "search", "google", "open")):
+    if any(kw in t for kw in ("browse", "website", "internet", "search", "google", "open", "go to", "linkedin")):
         return _TASK_OPEN_WEBSITE
 
     return _TASK_GENERAL_NAV
@@ -115,6 +178,213 @@ def plan_task(req: CareRequest) -> str:
         _TASK_GENERAL_NAV: "Perform the requested digital task on your computer.",
     }
     return plans.get(task_type, "Perform the requested digital task.")
+
+
+def _extract_json(text: str) -> dict:
+    text = re.sub(r"```(?:json)?\s*", "", text)
+    text = text.replace("```", "")
+    start = text.find("{")
+    end = text.rfind("}")
+    if start == -1 or end == -1 or end <= start:
+        raise ValueError(f"No JSON object found in model output: {text!r}")
+    return json.loads(text[start : end + 1])
+
+
+def _google_search_url(query: str) -> str:
+    return f"https://www.google.com/search?q={quote_plus(query.strip())}"
+
+
+def _google_site_search_url(site: str, query: str) -> str:
+    domain = urlparse(_KNOWN_SITE_URLS.get(site, site)).netloc or site
+    return _google_search_url(f"site:{domain} {query}")
+
+
+def _site_search_url(site: str, query: str) -> str:
+    site_key = re.sub(r"[^a-z0-9]+", "", site.lower())
+    encoded = quote_plus(query.strip())
+    if not encoded:
+        return _KNOWN_SITE_URLS.get(site_key, _google_search_url(site))
+
+    site_search_urls = {
+        "amazon": f"https://www.amazon.com/s?k={encoded}",
+        "google": _google_search_url(query),
+        "gmail": f"https://mail.google.com/mail/u/0/#search/{encoded}",
+        "instagram": f"https://www.instagram.com/explore/search/keyword/?q={encoded}",
+        "linkedin": f"https://www.linkedin.com/search/results/all/?keywords={encoded}",
+        "mail": f"https://mail.google.com/mail/u/0/#search/{encoded}",
+        "nytimes": f"https://www.nytimes.com/search?query={encoded}",
+        "wikipedia": f"https://www.wikipedia.org/search-redirect.php?search={encoded}",
+        "youtube": f"https://www.youtube.com/results?search_query={encoded}",
+    }
+    if site_key in site_search_urls:
+        return site_search_urls[site_key]
+    return _google_site_search_url(site_key, query)
+
+
+def _normalize_target_url(target_url: str, search_query: str = "") -> str:
+    target_url = (target_url or "").strip()
+    if not target_url and search_query:
+        return _google_search_url(search_query)
+    if not target_url:
+        return "https://www.google.com"
+    if target_url.startswith("mailto:"):
+        return target_url
+    if " " in target_url:
+        return _google_search_url(search_query or target_url)
+    if "://" not in target_url:
+        target_url = f"https://{target_url}"
+    parsed = urlparse(target_url)
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        return _google_search_url(search_query or target_url)
+    return target_url
+
+
+def _known_site_from_text(text: str) -> str:
+    compact_text = re.sub(r"[^a-z0-9]+", " ", text.lower())
+    for site in sorted(_KNOWN_SITE_URLS, key=len, reverse=True):
+        if re.search(rf"\b{re.escape(site)}\b", compact_text):
+            return site
+    return ""
+
+
+def _clean_open_target(transcript: str) -> str:
+    text = transcript.strip()
+    lowered = text.lower()
+    for prefix in (
+        "open up ", "open ", "go to ", "navigate to ", "browse to ",
+        "pull up ", "bring up ", "can you open ", "please open ",
+    ):
+        if lowered.startswith(prefix):
+            return text[len(prefix):].strip(" .!?")
+    return text.strip(" .!?")
+
+
+def _extract_site_search(transcript: str) -> tuple[str, str]:
+    site = _known_site_from_text(transcript)
+    if not site:
+        return "", ""
+
+    patterns = (
+        rf"\b(?:go to|open|open up|pull up|bring up)\s+{re.escape(site)}\s+(?:and\s+)?(?:search(?: for)?|look up|find)\s+(.+)$",
+        rf"\b(?:search(?: for)?|look up|find)\s+(.+?)\s+(?:on|in)\s+{re.escape(site)}\b",
+        rf"\b{re.escape(site)}\s+(?:search(?: for)?|look up|find)\s+(.+)$",
+    )
+    for pattern in patterns:
+        match = re.search(pattern, transcript, flags=re.IGNORECASE)
+        if match:
+            query = match.group(1).strip(" .!?")
+            if query:
+                return site, query
+
+    return "", ""
+
+
+def _fallback_automation_plan(req: CareRequest) -> AutomationPlan:
+    transcript = req.transcript.strip()
+    lowered = transcript.lower()
+
+    site, site_query = _extract_site_search(transcript)
+    if site and site_query:
+        return AutomationPlan(
+            action="site_search",
+            target_url=_site_search_url(site, site_query),
+            search_query=site_query,
+            site=site,
+            description=f"Search {site.title()} for {site_query}.",
+        )
+
+    if any(lowered.startswith(prefix) for prefix in (
+        "find ", "find me ", "search ", "search for ", "look up ",
+        "look for ", "show me ", "google ",
+    )):
+        query = re.sub(
+            r"^(find me|find|search for|search|look up|look for|show me|google)\s+",
+            "",
+            transcript,
+            flags=re.IGNORECASE,
+        ).strip(" .!?")
+        return AutomationPlan(
+            action="search_web",
+            target_url=_google_search_url(query),
+            search_query=query,
+            site="",
+            description=f"Search the web for {query}.",
+        )
+
+    target = _clean_open_target(transcript)
+    target_key = re.sub(r"[^a-z0-9]+", "", target.lower())
+    if target_key in _KNOWN_SITE_URLS:
+        return AutomationPlan(
+            action="open_url",
+            target_url=_KNOWN_SITE_URLS[target_key],
+            site=target_key,
+            description=f"Open {target}.",
+        )
+    if "." in target and " " not in target:
+        return AutomationPlan(
+            action="open_url",
+            target_url=_normalize_target_url(target),
+            site="",
+            description=f"Open {target}.",
+        )
+
+    query = target or transcript
+    return AutomationPlan(
+        action="search_web",
+        target_url=_google_search_url(query),
+        search_query=query,
+        site="",
+        description=f"Search the web for {query}.",
+    )
+
+
+async def _plan_automation(req: CareRequest) -> AutomationPlan:
+    site_first_plan = _fallback_automation_plan(req)
+    if site_first_plan.action == "site_search":
+        return site_first_plan
+
+    if not settings.anthropic_api_key:
+        return site_first_plan
+
+    from anthropic import AsyncAnthropic  # type: ignore
+
+    client = AsyncAnthropic(api_key=settings.anthropic_api_key)
+    try:
+        resp = await client.messages.create(
+            model=settings.anthropic_model,
+            max_tokens=300,
+            system=AUTOMATION_PLANNER_PROMPT,
+            messages=[
+                {
+                    "role": "user",
+                    "content": (
+                        f"Patient request: {req.transcript!r}\n"
+                        f"Patient context:\n{req.patient_context or '(none)'}"
+                    ),
+                }
+            ],
+        )
+        text: str = resp.content[0].text  # type: ignore[union-attr]
+        data = _extract_json(text)
+        action = data.get("action") if data.get("action") in {"open_url", "search_web", "site_search"} else "search_web"
+        search_query = str(data.get("search_query") or "").strip()
+        site = str(data.get("site") or "").strip().lower()
+        target_url = str(data.get("target_url") or "")
+        if action == "site_search" and search_query:
+            target_url = _site_search_url(site or _known_site_from_text(req.transcript), search_query)
+        else:
+            target_url = _normalize_target_url(target_url, search_query)
+        description = str(data.get("description") or "").strip() or site_first_plan.description
+        return AutomationPlan(
+            action=action,
+            target_url=target_url,
+            search_query=search_query,
+            site=site,
+            description=description,
+        )
+    except Exception:
+        logger.exception("Claude automation planning failed — falling back to deterministic planner")
+        return site_first_plan
 
 
 # ---------------------------------------------------------------------------
@@ -182,17 +452,47 @@ def _generate_script(req: CareRequest) -> str:
         )
 
 
+def _generate_script_from_plan(plan: AutomationPlan) -> str:
+    if plan.action == "site_search":
+        return _script_site_search(plan)
+    return _script_open_url(
+        url=plan.target_url,
+        description=plan.description,
+    )
+
+
+def _script_site_search(plan: AutomationPlan) -> str:
+    """Simulang script: open a site-specific search result page."""
+    safe_url = json.dumps(plan.target_url)
+    safe_description = json.dumps(plan.description)
+    safe_site = json.dumps(plan.site or "site")
+    safe_query = json.dumps(plan.search_query)
+    return f"""\
+// Simulang script: {plan.description}
+// Generated by Tendly automation service
+import {{ App, FocusPolicy, Visibility }} from '@simular-ai/simulang-js'
+
+console.log('[Tendly] ' + {safe_description})
+console.log('[Tendly] Searching ' + {safe_site} + ' for ' + {safe_query})
+const browser = App.defaultBrowser()
+browser.open({safe_url}, FocusPolicy.Steal, Visibility.Show, true)
+console.log('[Tendly] Done — site search opened to ' + {safe_url})
+"""
+
+
 def _script_open_url(url: str, description: str) -> str:
     """Simulang script: open a URL in the default browser."""
+    safe_url = json.dumps(url)
+    safe_description = json.dumps(description)
     return f"""\
 // Simulang script: {description}
 // Generated by Tendly automation service
 import {{ App, FocusPolicy, Visibility }} from '@simular-ai/simulang-js'
 
-console.log('[Tendly] {description}')
+console.log('[Tendly] ' + {safe_description})
 const browser = App.defaultBrowser()
-browser.open('{url}', FocusPolicy.Steal, Visibility.Show, true)
-console.log('[Tendly] Done — browser opened to {url}')
+browser.open({safe_url}, FocusPolicy.Steal, Visibility.Show, true)
+console.log('[Tendly] Done — browser opened to ' + {safe_url})
 """
 
 
@@ -301,7 +601,7 @@ async def _execute_simulang(script_content: str) -> dict:
             raise RuntimeError(f"simulang exited with code {proc.returncode}: {error}")
 
     except FileNotFoundError:
-        raise RuntimeError("simulang CLI not found on PATH")
+        return await _execute_local_open(script_content)
     except asyncio.TimeoutError:
         raise RuntimeError("simulang execution timed out (30s)")
     finally:
@@ -310,6 +610,56 @@ async def _execute_simulang(script_content: str) -> dict:
             os.unlink(script_path)
         except OSError:
             pass
+
+
+def _extract_open_target(script_content: str) -> Optional[str]:
+    """Extract the URL/mailto target from the generated Simulang script."""
+    consts = dict(re.findall(r"const\s+(\w+)\s*=\s*'([^']+)'", script_content))
+
+    direct = re.search(r"browser\.open\((['\"])(.*?)\1", script_content)
+    if direct:
+        return direct.group(2)
+
+    variable = re.search(r"browser\.open\((\w+),", script_content)
+    if variable:
+        return consts.get(variable.group(1))
+
+    return None
+
+
+async def _execute_local_open(script_content: str) -> dict:
+    """Local fallback for generated browser-opening Simulang scripts.
+
+    The hackathon app runs even when the `simulang` CLI is not installed. For
+    scripts that only open a URL/mailto target, we can perform the same visible
+    action locally instead of downgrading to a pure mock.
+    """
+    target = _extract_open_target(script_content)
+    if not target:
+        raise RuntimeError("simulang CLI not found on PATH")
+
+    if sys.platform == "darwin":
+        cmd = ["open", target]
+    elif sys.platform.startswith("linux"):
+        cmd = ["xdg-open", target]
+    else:
+        raise RuntimeError("simulang CLI not found on PATH")
+
+    proc = await asyncio.create_subprocess_exec(
+        *cmd,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=10.0)
+    if proc.returncode != 0:
+        error = stderr.decode().strip() or stdout.decode().strip()
+        raise RuntimeError(f"local open fallback failed: {error}")
+
+    logger.info("simulang CLI missing; opened target locally: %s", target)
+    return {
+        "status": "done",
+        "detail": f"Opened {target} locally because the simulang CLI is not installed.",
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -330,13 +680,27 @@ async def run_task(req: CareRequest) -> dict:
     """
     task_type = _classify_task(req)
     plan = plan_task(req)
-    script = _generate_script(req)
+    automation_plan: Optional[AutomationPlan] = None
+    if task_type in {_TASK_OPEN_WEBSITE, _TASK_PLAY_MEDIA, _TASK_GENERAL_NAV}:
+        automation_plan = await _plan_automation(req)
+        plan = automation_plan.description
+        script = _generate_script_from_plan(automation_plan)
+    else:
+        script = _generate_script(req)
 
     # Log the generated script for debugging
     logger.info(
         "Automation task: type=%s, patient=%s, plan=%s",
         task_type, req.patient_id, plan,
     )
+    if automation_plan:
+        logger.info(
+            "Automation plan: action=%s site=%s target=%s query=%s",
+            automation_plan.action,
+            automation_plan.site,
+            automation_plan.target_url,
+            automation_plan.search_query,
+        )
     logger.debug("Generated simulang script:\n%s", script)
 
     # Attempt real execution
@@ -381,7 +745,7 @@ def _build_mock_detail(
         _TASK_OPEN_PORTAL: "[Simular mock] Would open patient portal via simulang "
                            "App.defaultBrowser().open('https://mychart.org')",
         _TASK_PLAY_MEDIA: f"[Simular mock] Would open media player via simulang — plan: {plan}",
-        _TASK_OPEN_WEBSITE: f"[Simular mock] Would navigate browser via simulang — plan: {plan}",
+        _TASK_OPEN_WEBSITE: f"[Simular mock] Would navigate/search browser via simulang — plan: {plan}",
         _TASK_GENERAL_NAV: f"[Simular mock] Would perform web navigation via simulang — plan: {plan}",
     }
     return details.get(task_type, f"[Simular mock] Would: {plan}")

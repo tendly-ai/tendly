@@ -250,6 +250,34 @@
   background: #ea580c;
 }
 
+.replayButton {
+  padding: 12px 22px;
+  font-size: 18px;
+  font-weight: 600;
+  background: #ffffff;
+  color: #1d4ed8;
+  border: 2px solid #bfdbfe;
+  border-radius: 12px;
+  cursor: pointer;
+  margin: 0 0 12px 0;
+  transition: transform 0.1s ease, border-color 0.1s ease;
+}
+
+.replayButton:hover {
+  transform: scale(1.03);
+  border-color: #60a5fa;
+}
+
+.replayButton:active {
+  transform: scale(0.98);
+}
+
+.speechNote {
+  font-size: 16px;
+  color: #6b7280;
+  margin: -8px 0 12px 0;
+}
+
 /* Text input fallback area */
 .fallbackToggle {
   font-size: 18px;
