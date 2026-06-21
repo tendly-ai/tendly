@@ -1288,12 +1288,17 @@ async def _execute_simulang(script_content: str) -> dict:
 
     try:
         # Attempt to run via simulang CLI
+        env = {**os.environ, "NODE_NO_WARNINGS": "1"}
+        path = env.get("PATH", "")
+        paths_to_prepend = ["/opt/homebrew/opt/node@22/bin", "/opt/homebrew/bin"]
+        env["PATH"] = os.pathsep.join(paths_to_prepend + [path] if path else paths_to_prepend)
+
         proc = await asyncio.create_subprocess_exec(
             "simulang", "run", str(script_path),
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
             cwd=str(frontend_dir),
-            env={**os.environ, "NODE_NO_WARNINGS": "1"},
+            env=env,
         )
         stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=30.0)
 

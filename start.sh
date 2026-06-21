@@ -15,6 +15,13 @@ echo "Starting backend..."
 ) &
 BACKEND_PID=$!
 
+cleanup() {
+  echo "Stopping backend..."
+  kill "$BACKEND_PID" 2>/dev/null || true
+}
+trap cleanup EXIT INT TERM
+
+
 # ── Wait for backend ─────────────────────────────────────────────────────────
 echo "Waiting for backend on :8000..."
 for i in $(seq 1 30); do
@@ -28,4 +35,5 @@ echo "Backend ready."
 echo "Starting Electron..."
 cd frontend
 npm install --silent
-NODE_ENV=development npx electron .
+npm run electron:dev
+

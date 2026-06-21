@@ -59,6 +59,9 @@ def _init_redis():
     if not redis_url:
         logger.info("REDIS_URL not set — using in-memory fallback")
         return
+    if not (redis_url.startswith("redis://") or redis_url.startswith("rediss://") or redis_url.startswith("unix://")):
+        logger.warning("REDIS_URL does not specify a valid scheme (redis://, rediss://, or unix://) — using in-memory fallback")
+        return
     try:
         import redis as _redis_lib
         client = _redis_lib.Redis.from_url(
