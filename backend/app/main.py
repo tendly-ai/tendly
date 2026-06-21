@@ -14,13 +14,21 @@ from .ws import manager
 logging.basicConfig(level=logging.INFO)
 settings = get_settings()
 
-# Sentry init (§3.8). Implemented by the observability/error-tracking feature;
-# safe no-op when SENTRY_DSN is unset.
+# Sentry init (§3.8). Safe no-op when SENTRY_DSN is unset.
 if settings.sentry_dsn:
     try:
         import sentry_sdk
+        from sentry_sdk.integrations.fastapi import FastApiIntegration
+        from sentry_sdk.integrations.starlette import StarletteIntegration
 
-        sentry_sdk.init(dsn=settings.sentry_dsn, traces_sample_rate=0.1)
+        sentry_sdk.init(
+            dsn=settings.sentry_dsn,
+            traces_sample_rate=0.1,
+            integrations=[
+                StarletteIntegration(),
+                FastApiIntegration(),
+            ],
+        )
     except Exception:  # pragma: no cover
         logging.getLogger("tendly").warning("Sentry init failed", exc_info=True)
 

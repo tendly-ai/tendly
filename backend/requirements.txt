@@ -9,3 +9,4 @@ deepgram-sdk==3.5.0
 python-dotenv==1.0.1
 sentry-sdk[fastapi]==2.7.1
 websockets==12.0
+arize==8.28.0
