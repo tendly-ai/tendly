@@ -12,6 +12,7 @@ node_modules/
 out/
 dist/
 npm-debug.log*
+frontend/.simulang-tasks/
 
 # Env / secrets
 .env

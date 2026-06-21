@@ -6,7 +6,8 @@ description of the action to be taken (used for the patient confirmation prompt)
 
 Integration strategy:
 - Generates TypeScript scripts targeting `@simular-ai/simulang-js` (the real
-  desktop-automation library: browser opening, video calls, messaging, etc.)
+  desktop-automation library: browser opening, accessibility-tree checks,
+  video calls, messaging, etc.)
 - Attempts execution via the `simulang run` CLI subprocess.
 - Falls back to a rich mock if simulang is unavailable (e.g. headless env,
   no Node 22.18+, no macOS permissions). Guarded by TENDLY_ALLOW_MOCKS.
@@ -29,8 +30,9 @@ import sys
 import tempfile
 from dataclasses import dataclass
 from difflib import SequenceMatcher
+from pathlib import Path
 from typing import Optional
-from urllib.parse import quote, quote_plus, urlparse
+from urllib.parse import quote_plus, urlparse
 
 from ..config import get_settings
 from ..models import CareRequest, Category, FamilyContact, PatientProfile
@@ -38,6 +40,12 @@ from ..models import CareRequest, Category, FamilyContact, PatientProfile
 logger = logging.getLogger(__name__)
 
 settings = get_settings()
+
+_MESSAGE_BODY_STARTERS = {
+    "hello", "hi", "hey", "good", "please", "thanks", "thank",
+    "i", "i'm", "im", "we", "can", "could", "would", "will",
+    "want", "miss", "love", "need", "hope", "see", "call",
+}
 
 # ---------------------------------------------------------------------------
 # Task type detection
@@ -61,6 +69,12 @@ class AutomationPlan:
     site: str = ""
 
 
+@dataclass
+class MessageIntent:
+    recipient_name: str
+    body: str
+
+
 _KNOWN_SITE_URLS = {
     "amazon": "https://www.amazon.com",
     "cnn": "https://www.cnn.com",
@@ -78,6 +92,27 @@ _KNOWN_SITE_URLS = {
     "wikipedia": "https://www.wikipedia.org",
     "youtube": "https://www.youtube.com",
 }
+
+
+MESSAGE_INTENT_PROMPT = """\
+Extract the intended recipient and message body from an elderly patient's
+spoken request.
+
+Return ONLY valid JSON:
+{
+  "recipient_name": "person name or relationship, no extra words",
+  "body": "exact message the patient wants drafted"
+}
+
+Rules:
+- Do not include command words such as send, text, message, tell, saying, or that.
+- If the patient says "tell Henry I want to see you soon", recipient_name is
+  "Henry" and body is "I want to see you soon".
+- Preserve the patient's message content, but remove filler such as
+  "in my messages", "for me", and "please send".
+- If no explicit body exists, return an empty body.
+- Never invent facts or contacts.
+"""
 
 
 AUTOMATION_PLANNER_PROMPT = """\
@@ -163,11 +198,18 @@ def _extract_requested_contact_name(transcript: str) -> str:
         candidate = re.split(r"\b(?:saying|that|to say|and say|please|for me)\b", candidate, flags=re.IGNORECASE)[0]
         candidate = candidate.strip(" .!?")
         candidate = re.sub(r"^(my|the)\s+", "", candidate, flags=re.IGNORECASE)
+        words = candidate.split()
+        if len(words) > 1 and words[1].lower().strip(" .!?") in _MESSAGE_BODY_STARTERS:
+            candidate = words[0]
         if candidate.lower() in {"daughter", "son", "granddaughter", "grandson", "family", "family member"}:
             return ""
         return candidate.title() if candidate else ""
 
-    for marker in ("send a message to ", "send message to ", "send a text to ", "send text to "):
+    for marker in (
+        "send a message to ", "send message to ", "send a text to ", "send text to ",
+        "make a message to ", "write a message to ", "draft a message to ",
+        "compose a message to ", "create a message to ",
+    ):
         idx = lower.find(marker)
         if idx != -1:
             return clean(text[idx + len(marker):])
@@ -216,7 +258,67 @@ def _extract_message_body(transcript: str, contact_name: str, patient_name: str)
             if body and body.lower() not in {"a message", "message", "a text", "text"}:
                 return body
 
+    if contact_name and contact_name.lower() != "family member":
+        name_pattern = re.escape(contact_name)
+        for pattern in (
+            rf"\b(?:(?:send|make|write|draft|compose|create)\s+(?:a\s+)?(?:text|message)\s+to|text|message)\s+{name_pattern}\s+(.+)$",
+            rf"\b(?:tell|ask|say to)\s+{name_pattern}\s+(.+)$",
+        ):
+            match = re.search(pattern, transcript, flags=re.IGNORECASE)
+            if not match:
+                continue
+            body = match.group(1).strip(" .")
+            first = body.split(maxsplit=1)[0].lower() if body else ""
+            if first in _MESSAGE_BODY_STARTERS:
+                return body
+
     return f"Hi {contact_name}, this is a message from {patient_name}."
+
+
+def _fallback_message_intent(req: CareRequest) -> MessageIntent:
+    recipient_name = _extract_requested_contact_name(req.transcript)
+    if not recipient_name:
+        contact = _get_family_contact(req.patient_id)
+        recipient_name = contact.name if contact else "family member"
+    body = _extract_message_body(req.transcript, recipient_name, _get_patient_name(req.patient_id))
+    return MessageIntent(recipient_name=recipient_name, body=body)
+
+
+async def _parse_message_intent(req: CareRequest) -> MessageIntent:
+    fallback = _fallback_message_intent(req)
+    if not settings.anthropic_api_key:
+        return fallback
+
+    from anthropic import AsyncAnthropic  # type: ignore
+
+    client = AsyncAnthropic(api_key=settings.anthropic_api_key)
+    try:
+        resp = await client.messages.create(
+            model=settings.anthropic_model,
+            max_tokens=200,
+            system=MESSAGE_INTENT_PROMPT,
+            messages=[
+                {
+                    "role": "user",
+                    "content": (
+                        f"Patient request transcript: {req.transcript!r}\n"
+                        f"Patient context:\n{req.patient_context or '(none)'}"
+                    ),
+                }
+            ],
+        )
+        data = _extract_json(resp.content[0].text)  # type: ignore[union-attr]
+    except Exception:
+        logger.exception("Claude message parsing failed — falling back to deterministic parser")
+        return fallback
+
+    recipient_name = str(data.get("recipient_name") or "").strip()
+    body = str(data.get("body") or "").strip(" .")
+    if not recipient_name:
+        recipient_name = fallback.recipient_name
+    if not body:
+        body = fallback.body
+    return MessageIntent(recipient_name=recipient_name, body=body)
 
 
 def _lookup_macos_contact(name: str) -> Optional[FamilyContact]:
@@ -437,6 +539,21 @@ def _resolve_contact(req: CareRequest) -> Optional[FamilyContact]:
         return FamilyContact(name=requested_name, relation="contact")
 
     return family_contact
+
+
+def _resolve_contact_name(patient_id: str, name: str) -> FamilyContact:
+    family_contact = _get_family_contact(patient_id)
+    if family_contact and name and name.lower() in family_contact.name.lower():
+        return family_contact
+
+    mac_contact = _lookup_macos_contact(name)
+    if mac_contact:
+        return mac_contact
+    fuzzy_contact = _fuzzy_lookup_macos_contact(name)
+    if fuzzy_contact:
+        return fuzzy_contact
+
+    return FamilyContact(name=name or "family member", relation="contact")
 
 
 def _get_patient_name(patient_id: str) -> str:
@@ -691,8 +808,9 @@ def _generate_script(req: CareRequest) -> str:
 
     These scripts use the @simular-ai/simulang-js API:
     - App.defaultBrowser().open(url, FocusPolicy, Visibility, waitForLoad)
-    - App.open(bundleId/path) for native apps
-    See: https://github.com/simular-ai/simulang / SKILL.md
+    - AccessibilityTree.fromPid(...).snapshot(true) for visible UI state
+    - KeyboardController instances for hardware keyboard fallback
+    See: https://docs.simular.ai/simulang/simulang-primer
     """
     task_type = _classify_task(req)
     contact = _resolve_contact(req)
@@ -727,10 +845,11 @@ def _generate_script(req: CareRequest) -> str:
     elif task_type == _TASK_SEND_MESSAGE:
         contact_name = contact.name if contact else "family member"
         contact_phone = contact.phone if contact else None
-        # Prefer phone for SMS; Contacts lookup happens in run_task and is passed via req
+        contact_email = contact.email if contact else None
+        # Prefer phone for SMS; Contacts lookup happens in run_task and is passed via req.
         contact_phone = getattr(req, "_resolved_phone", None) or (contact.phone if contact else None)
         message = _extract_message_body(req.transcript, contact_name, _get_patient_name(req.patient_id))
-        return _script_send_message(contact_name, contact_phone, contact_phone, message)
+        return _script_send_message(contact_name, contact_phone, contact_email, message)
 
     elif task_type == _TASK_OPEN_WEBSITE:
         url = _extract_url_from_transcript(req.transcript)
@@ -758,6 +877,92 @@ def _generate_script_from_plan(plan: AutomationPlan) -> str:
     )
 
 
+def _simulang_imports() -> str:
+    return (
+        "import {\n"
+        "  AccessibilityTree,\n"
+        "  App,\n"
+        "  AriaRole,\n"
+        "  Direction,\n"
+        "  FocusPolicy,\n"
+        "  Key,\n"
+        "  KeyboardController,\n"
+        "  Visibility,\n"
+        "  type AccessibilityNodeJs,\n"
+        "} from '@simular-ai/simulang-js'"
+    )
+
+
+def _simulang_helpers() -> str:
+    return """\
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
+
+function flattenDFS(node: AccessibilityNodeJs, out: AccessibilityNodeJs[] = []): AccessibilityNodeJs[] {
+  out.push(node)
+  for (const child of node.children) flattenDFS(child, out)
+  return out
+}
+
+const stripPUA = (value: string) =>
+  value.replace(/[\\uE000-\\uF8FF]/g, '').replace(/\\s+/g, ' ').trim()
+
+const labelOf = (node: AccessibilityNodeJs) =>
+  stripPUA([node.name, node.value, node.description, node.helpText].filter(Boolean).join(' '))
+
+function pageNodes(root: AccessibilityNodeJs): AccessibilityNodeJs[] {
+  const all = flattenDFS(root)
+  const docs = all.filter((node) => node.role === AriaRole.Document)
+  return docs.length ? flattenDFS(docs[docs.length - 1]) : all
+}
+
+function findNode(nodes: AccessibilityNodeJs[], roles: AriaRole[], label: RegExp) {
+  return nodes.find((node) => roles.includes(node.role) && node.refId != null && label.test(labelOf(node)))
+}
+
+async function withSnapshot<T>(
+  tree: AccessibilityTree,
+  predicate: (nodes: AccessibilityNodeJs[]) => T | null | undefined,
+  label: string,
+  timeoutMs = 8000,
+  intervalMs = 250,
+): Promise<T> {
+  const deadline = Date.now() + timeoutMs
+  while (Date.now() < deadline) {
+    const result = predicate(pageNodes(tree.snapshot(false)))
+    if (result) return result
+    await sleep(intervalMs)
+  }
+  throw new Error(`Timed out waiting for ${label}`)
+}
+
+async function waitForBrowserDocument(instance: any, label: string) {
+  await sleep(1500)
+  if (!instance.isAccessible()) instance.enableAccessibility()
+  const tree = AccessibilityTree.fromPid(instance.pid)
+  await withSnapshot(
+    tree,
+    (nodes) => nodes.some((node) => node.role === AriaRole.Document) ? true : null,
+    `browser document for ${label}`,
+  )
+}
+
+function fail(error: unknown): never {
+  console.error('[Tendly] Simulang failed:', error instanceof Error ? error.message : error)
+  process.exit(1)
+}
+
+function keyClick(keyboard: KeyboardController, key: Key) {
+  keyboard.key(key, Direction.Click)
+}
+
+async function chord(keyboard: KeyboardController, keys: Key[]) {
+  for (const key of keys) keyboard.key(key, Direction.Press)
+  await sleep(80)
+  for (const key of [...keys].reverse()) keyboard.key(key, Direction.Release)
+}
+"""
+
+
 def _script_site_search(plan: AutomationPlan) -> str:
     """Simulang script: open a site-specific search result page."""
     safe_url = json.dumps(plan.target_url)
@@ -767,13 +972,18 @@ def _script_site_search(plan: AutomationPlan) -> str:
     return f"""\
 // Simulang script: {plan.description}
 // Generated by Tendly automation service
-import {{ App, FocusPolicy, Visibility }} from '@simular-ai/simulang-js'
+{_simulang_imports()}
+{_simulang_helpers()}
 
-console.log('[Tendly] ' + {safe_description})
-console.log('[Tendly] Searching ' + {safe_site} + ' for ' + {safe_query})
-const browser = App.defaultBrowser()
-browser.open({safe_url}, FocusPolicy.Steal, Visibility.Show, true)
-console.log('[Tendly] Done — site search opened to ' + {safe_url})
+try {{
+  console.log('[Tendly] ' + {safe_description})
+  console.log('[Tendly] Searching ' + {safe_site} + ' for ' + {safe_query})
+  const instance = App.defaultBrowser().open({safe_url}, FocusPolicy.Steal, Visibility.Show, true)
+  await waitForBrowserDocument(instance, {safe_site})
+  console.log('[Tendly] Done: Simulang opened site search at ' + {safe_url})
+}} catch (error) {{
+  fail(error)
+}}
 """
 
 
@@ -784,12 +994,17 @@ def _script_open_url(url: str, description: str) -> str:
     return f"""\
 // Simulang script: {description}
 // Generated by Tendly automation service
-import {{ App, FocusPolicy, Visibility }} from '@simular-ai/simulang-js'
+{_simulang_imports()}
+{_simulang_helpers()}
 
-console.log('[Tendly] ' + {safe_description})
-const browser = App.defaultBrowser()
-browser.open({safe_url}, FocusPolicy.Steal, Visibility.Show, true)
-console.log('[Tendly] Done — browser opened to ' + {safe_url})
+try {{
+  console.log('[Tendly] ' + {safe_description})
+  const instance = App.defaultBrowser().open({safe_url}, FocusPolicy.Steal, Visibility.Show, true)
+  await waitForBrowserDocument(instance, {safe_description})
+  console.log('[Tendly] Done: Simulang opened browser to ' + {safe_url})
+}} catch (error) {{
+  fail(error)
+}}
 """
 
 
@@ -807,43 +1022,160 @@ def _script_call(contact_name: str, contact_phone: Optional[str], *, video: bool
     safe_recipient = json.dumps(recipient)
     safe_contact_name = json.dumps(contact_name)
     safe_kind = json.dumps(call_kind)
+    call_label_re = "video|facetime|call" if video else "audio|phone|call"
     return f"""\
 // Simulang script: Start {call_kind} with {contact_name}
 // Generated by Tendly automation service
-import {{ App, FocusPolicy, Visibility, KeyboardController, Clipboard, Key }} from '@simular-ai/simulang-js'
+{_simulang_imports()}
+{_simulang_helpers()}
 
-async function run() {{
-    console.log('[Tendly] Starting ' + {safe_kind} + ' with ' + {safe_contact_name})
-    await App.launch('FaceTime', FocusPolicy.Steal, Visibility.Show, true)
-    await new Promise(resolve => setTimeout(resolve, 1500))
+try {{
+  console.log('[Tendly] Starting ' + {safe_kind} + ' with ' + {safe_contact_name})
+  const instance = App.exactName('FaceTime').open(null, FocusPolicy.Steal, Visibility.Show, true)
+  await sleep(1200)
+  if (!instance.isAccessible()) instance.enableAccessibility()
 
-    await Clipboard.set({safe_recipient})
-    await KeyboardController.chord([Key.Command, Key.L])
-    await KeyboardController.chord([Key.Command, Key.V])
-    await new Promise(resolve => setTimeout(resolve, 500))
-    await KeyboardController.press(Key.Return)
+  const tree = AccessibilityTree.fromPid(instance.pid)
+  const nodes = pageNodes(tree.snapshot(false))
+  const searchBox = findNode(nodes, [AriaRole.Textbox], /name|email|phone|search|to/i)
+    ?? nodes.find((n) => n.role === AriaRole.Textbox && n.refId != null)
 
-    console.log('[Tendly] FaceTime handoff started for ' + {safe_contact_name})
+  if (searchBox?.refId != null) {{
+    tree.setValue(searchBox.refId, {safe_recipient})
+  }} else {{
+    const keyboard = new KeyboardController()
+    keyboard.text({safe_recipient})
+  }}
+
+  await sleep(500)
+  const freshNodes = pageNodes(tree.snapshot(false))
+  const callButton = findNode(freshNodes, [AriaRole.Button], /{call_label_re}/i)
+  if (callButton?.refId == null) throw new Error('Could not find a FaceTime call button.')
+  tree.activate(callButton.refId)
+  console.log('[Tendly] Done: FaceTime handoff started for ' + {safe_contact_name})
+}} catch (error) {{
+  fail(error)
 }}
-
-run()
 """
 
 
-def _script_send_message(contact_name: str, contact_email: Optional[str], message: str) -> str:
-    """Simulang script: send a message to a family contact via email."""
-    email = contact_email or "family@example.com"
-    safe_message = message.replace("'", "\\'")
+def _script_send_message(
+    contact_name: str,
+    contact_phone: Optional[str],
+    contact_email: Optional[str],
+    message: str,
+) -> str:
+    """Simulang script: draft a confirmed message to a family contact."""
+    recipient = _phone_uri_value(contact_phone) or contact_email or contact_name
+    safe_recipient = json.dumps(recipient)
+    safe_message = json.dumps(message)
+    safe_contact_name = json.dumps(contact_name)
+    safe_search_name = json.dumps(contact_name)
     return f"""\
-// Simulang script: Send text message to {contact_name}
+// Simulang script: Draft message to {contact_name}
 // Generated by Tendly automation service
-import {{ App, FocusPolicy, Visibility, KeyboardController, Clipboard, Key }} from '@simular-ai/simulang-js'
+{_simulang_imports()}
+{_simulang_helpers()}
 
-console.log('[Tendly] Sending message to {contact_name} at {email}')
-const browser = App.defaultBrowser()
-const mailtoUrl = 'mailto:{email}?subject=Message from Tendly&body={safe_message}'
-browser.open(mailtoUrl, FocusPolicy.Steal, Visibility.Show, true)
-console.log('[Tendly] Message compose window opened for {contact_name}')
+try {{
+  console.log('[Tendly] Opening Messages compose for ' + {safe_contact_name})
+  const instance = App.exactName('Messages').open(null, FocusPolicy.Steal, Visibility.Show, true)
+  await sleep(1200)
+  if (!instance.isAccessible()) instance.enableAccessibility()
+
+  const tree = AccessibilityTree.fromPid(instance.pid)
+  const keyboard = new KeyboardController()
+
+  const findMessageBodyField = async (timeoutMs = 3500) => withSnapshot(
+    tree,
+    (nodes) => {{
+      const fields = nodes.filter((node) => {{
+        if (node.role !== AriaRole.Textbox || node.refId == null) return false
+        return !/search|to|recipient|name|phone|email/i.test(labelOf(node))
+      }})
+      return fields.find((node) => /message|imessage|text message/i.test(labelOf(node))) ?? fields[fields.length - 1]
+    }},
+    'Messages body field',
+    timeoutMs,
+  )
+
+  const searchField = await withSnapshot(
+    tree,
+    (nodes) => findNode(nodes, [AriaRole.Textbox, AriaRole.Searchbox], /search/i),
+    'Messages search field',
+    2500,
+  ).catch(() => null)
+
+  if (searchField?.refId != null) {{
+    tree.setValue(searchField.refId, {safe_search_name})
+    await sleep(900)
+    keyClick(keyboard, Key.DownArrow)
+    await sleep(150)
+    keyClick(keyboard, Key.Return)
+    await sleep(900)
+    keyClick(keyboard, Key.Escape)
+    await sleep(500)
+
+    const existingBodyField = await findMessageBodyField(2500).catch(() => null)
+    if (existingBodyField?.refId != null) {{
+      tree.setValue(existingBodyField.refId, {safe_message})
+      console.log('[Tendly] Done: Simulang drafted a message in an existing Messages conversation for ' + {safe_contact_name})
+      process.exit(0)
+    }}
+  }}
+
+  const composeButton = await withSnapshot(
+    tree,
+    (nodes) => findNode(nodes, [AriaRole.Button], /new message|compose|new/i),
+    'Messages compose button',
+    2500,
+  ).catch(() => null)
+
+  if (composeButton?.refId != null) {{
+    tree.activate(composeButton.refId)
+  }} else {{
+    await chord(keyboard, [Key.Meta, Key.N])
+  }}
+  await sleep(800)
+
+  const recipientField = await withSnapshot(
+    tree,
+    (nodes) =>
+      findNode(nodes, [AriaRole.Textbox, AriaRole.Combobox], /to|recipient|name|phone|email/i)
+      ?? nodes.find((node) =>
+        (node.role === AriaRole.Textbox || node.role === AriaRole.Combobox) && node.refId != null
+      ),
+    'Messages recipient field',
+  )
+
+  if (recipientField.refId == null) throw new Error('Messages recipient field did not expose a refId.')
+  tree.setValue(recipientField.refId, {safe_recipient})
+  await sleep(1200)
+  keyClick(keyboard, Key.DownArrow)
+  await sleep(250)
+  keyClick(keyboard, Key.Return)
+  await sleep(700)
+  keyClick(keyboard, Key.Tab)
+  await sleep(400)
+
+  const messageField = await withSnapshot(
+    tree,
+    (nodes) => {{
+      const fields = nodes.filter((node) => {{
+        if (node.role !== AriaRole.Textbox || node.refId == null) return false
+        return !/search|to|recipient|name|phone|email/i.test(labelOf(node))
+      }})
+      return fields.find((node) => /message|imessage|text message/i.test(labelOf(node))) ?? fields[fields.length - 1]
+    }},
+    'Messages body field',
+  )
+
+  if (messageField.refId == null) throw new Error('Messages body field did not expose a refId.')
+  tree.setValue(messageField.refId, {safe_message})
+  console.log('[Tendly] Done: Simulang drafted a Messages conversation for ' + {safe_contact_name})
+}} catch (error) {{
+  fail(error)
+}}
 """
 
 
@@ -875,7 +1207,7 @@ def _extract_url_from_transcript(transcript: str) -> str:
                     return f"https://{remainder}"
                 return remainder
             # Otherwise, Google it
-            return f"https://www.google.com/search?q={remainder}"
+            return _google_search_url(remainder)
     return "https://www.google.com"
 
 
@@ -890,19 +1222,30 @@ async def _execute_simulang(script_content: str) -> dict:
     Returns {"status": "done", "detail": ...} on success,
     or raises RuntimeError if simulang is unavailable.
     """
-    # Write script to a temp file
+    repo_root = Path(__file__).resolve().parents[3]
+    frontend_dir = repo_root / "frontend"
+    script_dir = frontend_dir / ".simulang-tasks"
+    script_dir.mkdir(parents=True, exist_ok=True)
+
+    # Keep generated scripts in one ignored project directory; `simulang run`
+    # resolves @simular-ai/simulang-js via its bundled runtime by default.
     with tempfile.NamedTemporaryFile(
-        mode="w", suffix=".ts", prefix="tendly_task_", delete=False
+        mode="w",
+        suffix=".mts",
+        prefix="tendly_task_",
+        dir=script_dir,
+        delete=False,
     ) as f:
         f.write(script_content)
-        script_path = f.name
+        script_path = Path(f.name)
 
     try:
         # Attempt to run via simulang CLI
         proc = await asyncio.create_subprocess_exec(
-            "simulang", "run", script_path,
+            "simulang", "run", str(script_path),
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
+            cwd=str(frontend_dir),
             env={**os.environ, "NODE_NO_WARNINGS": "1"},
         )
         stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=30.0)
@@ -912,74 +1255,22 @@ async def _execute_simulang(script_content: str) -> dict:
             logger.info("simulang task completed: %s", output)
             return {"status": "done", "detail": f"Task executed successfully. {output}"}
         else:
-            error = stderr.decode().strip()
+            error = stderr.decode().strip() or stdout.decode().strip()
             logger.warning("simulang failed (rc=%d): %s", proc.returncode, error)
             raise RuntimeError(f"simulang exited with code {proc.returncode}: {error}")
 
     except FileNotFoundError:
-        return await _execute_local_open(script_content)
+        raise RuntimeError(
+            "simulang CLI not found on PATH. Install/authenticate Simulang, then rerun the task."
+        )
     except asyncio.TimeoutError:
         raise RuntimeError("simulang execution timed out (30s)")
     finally:
         # Clean up temp script
         try:
-            os.unlink(script_path)
+            script_path.unlink()
         except OSError:
             pass
-
-
-def _extract_open_target(script_content: str) -> Optional[str]:
-    """Extract the URL/mailto target from the generated Simulang script."""
-    consts = dict(re.findall(r"const\s+(\w+)\s*=\s*'([^']+)'", script_content))
-
-    direct = re.search(r"browser\.open\((['\"])(.*?)\1", script_content)
-    if direct:
-        return direct.group(2)
-
-    variable = re.search(r"browser\.open\((\w+),", script_content)
-    if variable:
-        return consts.get(variable.group(1))
-
-    return None
-
-
-async def _execute_local_open(script_content: str) -> dict:
-    """Local fallback for generated browser-opening Simulang scripts.
-
-    The hackathon app runs even when the `simulang` CLI is not installed. For
-    scripts that only open a URL/app handoff target, we can perform the same visible
-    action locally instead of downgrading to a pure mock.
-    """
-    target = _extract_open_target(script_content)
-    if not target:
-        raise RuntimeError("simulang CLI not found on PATH")
-
-    return await _open_local_target(
-        target,
-        f"Opened {target} locally because the simulang CLI is not installed.",
-    )
-
-
-async def _open_local_target(target: str, detail: str) -> dict:
-    if sys.platform == "darwin":
-        cmd = ["open", target]
-    elif sys.platform.startswith("linux"):
-        cmd = ["xdg-open", target]
-    else:
-        raise RuntimeError("local app handoff is not supported on this platform")
-
-    proc = await asyncio.create_subprocess_exec(
-        *cmd,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
-    )
-    stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=10.0)
-    if proc.returncode != 0:
-        error = stderr.decode().strip() or stdout.decode().strip()
-        raise RuntimeError(f"local handoff failed: {error}")
-
-    logger.info("local app handoff opened: %s", target)
-    return {"status": "done", "detail": detail}
 
 
 # ---------------------------------------------------------------------------
@@ -1000,16 +1291,6 @@ async def run_task(req: CareRequest) -> dict:
     """
     task_type = _classify_task(req)
 
-    # For message tasks, look up the contact's phone in macOS Contacts first
-    if task_type == _TASK_SEND_MESSAGE:
-        contact = _get_family_contact(req.patient_id)
-        if contact:
-            resolved = await _lookup_contact_phone(contact.name)
-            if not resolved and contact.phone:
-                resolved = contact.phone  # fall back to stored phone
-            req._resolved_phone = resolved  # type: ignore[attr-defined]
-            logger.info("Resolved phone for %s: %s", contact.name, resolved or "(none found)")
-
     plan = plan_task(req)
     automation_plan: Optional[AutomationPlan] = None
     contact = _resolve_contact(req)
@@ -1018,6 +1299,16 @@ async def run_task(req: CareRequest) -> dict:
         automation_plan = await _plan_automation(req)
         plan = automation_plan.description
         script = _generate_script_from_plan(automation_plan)
+    elif task_type == _TASK_SEND_MESSAGE:
+        message_intent = await _parse_message_intent(req)
+        contact = _resolve_contact_name(req.patient_id, message_intent.recipient_name)
+        plan = f"Send a message to {contact.name} ({contact.relation})."
+        script = _script_send_message(
+            contact.name,
+            contact.phone,
+            contact.email,
+            message_intent.body,
+        )
     else:
         script = _generate_script(req)
 
@@ -1042,24 +1333,6 @@ async def run_task(req: CareRequest) -> dict:
         return result
     except RuntimeError as exc:
         logger.warning("simulang execution failed: %s", exc)
-
-        if task_type == _TASK_SEND_MESSAGE:
-            contact_name = contact.name if contact else "family member"
-            contact_phone = contact.phone if contact else None
-            contact_email = contact.email if contact else None
-            message = _extract_message_body(req.transcript, contact_name, _get_patient_name(req.patient_id))
-            recipient = _phone_uri_value(contact_phone) or contact_email or contact_name
-            return await _draft_message_local(recipient, message, contact_name)
-
-        if task_type == _TASK_VIDEO_CALL:
-            contact_name = contact.name if contact else "family member"
-            contact_phone = contact.phone if contact else None
-            video = any(kw in req.transcript.lower() for kw in ("video", "facetime", "zoom"))
-            target = _local_call_target(contact_name, contact_phone, video=video)
-            return await _open_local_target(
-                target,
-                f"Opened call handoff for {contact_name}.",
-            )
 
         if not settings.allow_mocks:
             raise

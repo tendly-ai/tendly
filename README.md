@@ -59,6 +59,22 @@ With `TENDLY_ALLOW_MOCKS=true` (default), every integration falls back to a
 deterministic mock when its API key is missing, so the full app runs end-to-end
 without any credentials. Set keys in `.env` to use the real services.
 
+### Simulang automation
+
+Confirmed automation tasks run through the real Simulang CLI:
+
+```bash
+npm install -g @simular-ai/simulang  # requires Node.js 22.18+
+simulang setup                       # macOS Accessibility/Input/Screen prompts
+```
+
+The backend writes generated TypeScript scripts under
+`frontend/.simulang-tasks/` and executes them with `simulang run`. The scripts
+import `@simular-ai/simulang-js`, open or focus the target app, inspect the
+accessibility tree, and act on refIds where possible. With
+`TENDLY_ALLOW_MOCKS=true`, a missing or failing Simulang runtime returns a mock
+detail instead of silently using a non-Simulang local handoff.
+
 ## Desktop app (Electron)
 
 ### Dev mode
