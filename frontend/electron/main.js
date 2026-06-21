@@ -63,8 +63,17 @@ function createWindow() {
   }
 
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    if (url.startsWith('http')) shell.openExternal(url);
+    if (url.startsWith('http') || url.startsWith('mailto:')) shell.openExternal(url);
     return { action: 'deny' };
+  });
+
+  // Route mailto: navigations (e.g. window.location.href = 'mailto:...') to the
+  // OS default mail client instead of trying to load them in the window.
+  mainWindow.webContents.on('will-navigate', (event, url) => {
+    if (url.startsWith('mailto:')) {
+      event.preventDefault();
+      shell.openExternal(url);
+    }
   });
 
   mainWindow.on('closed', () => { mainWindow = null; });
@@ -238,6 +247,13 @@ app.whenReady().then(() => {
   // Allow microphone access in renderer windows (needed for voice recording)
   session.defaultSession.setPermissionRequestHandler((_webContents, permission, callback) => {
     callback(permission === 'media');
+  });
+
+  // Open external URLs (e.g. mailto:) in the OS default handler.
+  ipcMain.on('open-external', (_event, url) => {
+    if (typeof url === 'string' && (url.startsWith('mailto:') || url.startsWith('http'))) {
+      shell.openExternal(url);
+    }
   });
 
   // Resize the popover window from the renderer

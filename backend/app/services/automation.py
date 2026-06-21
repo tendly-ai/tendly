@@ -321,13 +321,43 @@ async def _parse_message_intent(req: CareRequest) -> MessageIntent:
     return MessageIntent(recipient_name=recipient_name, body=body)
 
 
+_contacts_launched = False
+
+
+def _ensure_contacts_running() -> None:
+    """Launch Contacts.app in the background so AppleScript queries don't hit
+    error -600 ("Application isn't running"). Runs at most once per process."""
+    global _contacts_launched
+    if _contacts_launched or sys.platform != "darwin":
+        return
+    try:
+        # -g: don't bring to foreground, -j: launch hidden, -a: by app name.
+        subprocess.run(["open", "-gja", "Contacts"], timeout=5, check=False)
+    except Exception as exc:
+        logger.warning("Could not launch Contacts.app: %s", exc)
+    _contacts_launched = True
+
+
+def _note_contacts_permission_error(stderr: str) -> None:
+    """Surface the macOS Automation permission issue with an actionable hint."""
+    if "-1743" in stderr or "Not authorized" in stderr:
+        logger.warning(
+            "macOS denied Apple Events to Contacts (-1743). Grant access under "
+            "System Settings > Privacy & Security > Automation, enabling Contacts "
+            "for the app that runs this backend (Terminal / your IDE / Tendly)."
+        )
+
+
 def _lookup_macos_contact(name: str) -> Optional[FamilyContact]:
     """Look up a single named person in macOS Contacts without listing contacts."""
     if not name or sys.platform != "darwin":
         return None
 
+    _ensure_contacts_running()
+
     script = r'''
 tell application "Contacts"
+    launch
     set searchName to __SEARCH_NAME__
     set matches to people whose name contains searchName
     if (count of matches) = 0 then return ""
@@ -377,6 +407,7 @@ end tell
 
     if proc.returncode != 0:
         logger.warning("macOS Contacts lookup failed for %s: %s", name, proc.stderr.strip())
+        _note_contacts_permission_error(proc.stderr)
         return None
 
     parts = proc.stdout.strip().split("\t")
@@ -396,8 +427,13 @@ def _list_macos_contact_names() -> list[str]:
     if sys.platform != "darwin":
         return []
 
+    _ensure_contacts_running()
+
     script = r'''
-tell application "Contacts" to return name of people
+tell application "Contacts"
+    launch
+    return name of people
+end tell
 '''
 
     try:
@@ -414,6 +450,7 @@ tell application "Contacts" to return name of people
 
     if proc.returncode != 0:
         logger.warning("macOS Contacts name listing failed: %s", proc.stderr.strip())
+        _note_contacts_permission_error(proc.stderr)
         return []
 
     names = [name.strip() for name in proc.stdout.strip().split(", ") if name.strip()]

@@ -38,6 +38,9 @@ RULES:
   verbatim distressing quotes.
 - Do NOT use alarming language even if a concern exists; frame gently.
 - Keep it to 1–2 short paragraphs (roughly 100–180 words).
+- Do NOT include a greeting (e.g. "Hi Sarah,") or a sign-off (e.g. "Warmly," \
+  or "The Tendly Care Team"). Start directly with the update — these are added \
+  separately.
 
 STRUCTURE (weave naturally, don't use headers):
 1. General well-being and mood this week.

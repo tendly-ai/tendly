@@ -29,6 +29,13 @@ export interface CareRequest {
   spoken_response: string | null;
 }
 
+export interface FamilyContact {
+  name: string;
+  relation: string;
+  phone?: string | null;
+  email?: string | null;
+}
+
 export interface PatientProfile {
   patient_id: string;
   name: string;
@@ -36,4 +43,5 @@ export interface PatientProfile {
   age?: number;
   interests: string[];
   common_requests: string[];
+  family_contacts: FamilyContact[];
 }

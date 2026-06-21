@@ -427,3 +427,220 @@
   color: #a1a1aa;
   font-size: 14px;
 }
+
+/* ── Progress report button (header, top-right) ── */
+.reportBtn {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #fff;
+  background: #09090b;
+  border: 1px solid #09090b;
+  border-radius: 8px;
+  padding: 8px 14px;
+  cursor: pointer;
+  transition: opacity 0.12s, transform 0.06s;
+  white-space: nowrap;
+}
+.reportBtn:hover { opacity: 0.88; }
+.reportBtn:active { transform: translateY(1px); }
+
+/* ── Modal ───────────────────────────────────── */
+.modalOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(9, 9, 11, 0.5);
+  backdrop-filter: blur(2px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  z-index: 1000;
+  animation: slideIn 0.12s ease;
+}
+
+.modal {
+  background: #ffffff;
+  border: 1px solid #e4e4e7;
+  border-radius: 14px;
+  width: 100%;
+  max-width: 560px;
+  max-height: 88vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.25);
+  overflow: hidden;
+}
+
+.modalHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 20px;
+  border-bottom: 1px solid #f4f4f5;
+}
+
+.modalTitle {
+  font-size: 16px;
+  font-weight: 700;
+  color: #09090b;
+  margin: 0;
+}
+
+.modalClose {
+  font-size: 22px;
+  line-height: 1;
+  color: #a1a1aa;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0 4px;
+}
+.modalClose:hover { color: #09090b; }
+
+.modalBody {
+  padding: 20px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.fieldLabel {
+  font-size: 12px;
+  font-weight: 600;
+  color: #52525b;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.select,
+.input,
+.textarea {
+  font-size: 14px;
+  color: #09090b;
+  background: #fafafa;
+  border: 1px solid #e4e4e7;
+  border-radius: 8px;
+  padding: 9px 11px;
+  width: 100%;
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.12s, background 0.12s;
+}
+.select:focus,
+.input:focus,
+.textarea:focus {
+  border-color: #09090b;
+  background: #ffffff;
+}
+.textarea { resize: vertical; line-height: 1.5; }
+
+.recipientList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.recipientChip {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  text-align: left;
+  background: #fafafa;
+  border: 1px solid #e4e4e7;
+  border-radius: 8px;
+  padding: 9px 12px;
+  cursor: pointer;
+  transition: border-color 0.12s, background 0.12s;
+}
+.recipientChip:hover { border-color: #d4d4d8; background: #ffffff; }
+.recipientChipActive {
+  border-color: #09090b;
+  background: #ffffff;
+  box-shadow: inset 0 0 0 1px #09090b;
+}
+
+.recipientName {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: #09090b;
+}
+.recipientMeta { font-size: 12px; color: #71717a; }
+
+.primaryBadge {
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: #166534;
+  background: #dcfce7;
+  border: 1px solid #bbf7d0;
+  border-radius: 999px;
+  padding: 1px 8px;
+  line-height: 1.5;
+}
+
+.searchRow {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+.searchRow .input { flex: 1; }
+
+.selectedRecipient { font-size: 12.5px; color: #16a34a; margin: 2px 0 0; }
+.hint { font-size: 12.5px; color: #a1a1aa; margin: 0; }
+.errorText { font-size: 12.5px; color: #dc2626; margin: 2px 0 0; }
+.successText { font-size: 13px; color: #16a34a; font-weight: 500; margin: 0; }
+
+.modalFooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 16px 20px;
+  border-top: 1px solid #f4f4f5;
+}
+
+.footerActions { display: flex; gap: 8px; }
+
+.primaryBtn {
+  font-size: 13px;
+  font-weight: 600;
+  color: #fff;
+  background: #09090b;
+  border: 1px solid #09090b;
+  border-radius: 8px;
+  padding: 9px 16px;
+  cursor: pointer;
+  transition: opacity 0.12s;
+}
+.primaryBtn:hover:not(:disabled) { opacity: 0.88; }
+.primaryBtn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.secondaryBtn {
+  font-size: 13px;
+  font-weight: 500;
+  color: #52525b;
+  background: #ffffff;
+  border: 1px solid #e4e4e7;
+  border-radius: 8px;
+  padding: 9px 14px;
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s, color 0.12s;
+}
+.secondaryBtn:hover:not(:disabled) {
+  background: #fafafa;
+  border-color: #d4d4d8;
+  color: #09090b;
+}
+.secondaryBtn:disabled { opacity: 0.4; cursor: not-allowed; }

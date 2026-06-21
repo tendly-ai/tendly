@@ -7,7 +7,7 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
 from .config import get_settings
-from .routes import patients, requests, speech, summaries, tasks, voice
+from .routes import contacts, patients, requests, speech, summaries, tasks, voice
 from .seed import seed
 from .ws import manager
 
@@ -43,6 +43,7 @@ app.add_middleware(
 
 app.include_router(requests.router)
 app.include_router(patients.router)
+app.include_router(contacts.router)
 app.include_router(summaries.router)
 app.include_router(tasks.router)
 app.include_router(speech.router)

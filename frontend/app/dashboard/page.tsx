@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { listRequests, updateStatus, WS_URL } from "../../lib/api";
 import type { CareRequest, Status, Urgency } from "../../lib/types";
 import { useAccount } from "../context/AccountContext";
+import ProgressReportModal from "./ProgressReportModal";
 import styles from "./dashboard.module.css";
 
 const URGENCY_RANK: Record<Urgency, number> = { emergency: 0, high: 1, medium: 2, low: 3 };
@@ -68,6 +69,7 @@ export default function Dashboard() {
   const [requests,  setRequests]  = useState<CareRequest[]>([]);
   const [connected, setConnected] = useState(false);
   const [filter,    setFilter]    = useState<Filter>("all");
+  const [reportOpen, setReportOpen] = useState(false);
 
   const highlighted = useRef<Set<string>>(new Set());
   const knownIds    = useRef<Set<string>>(new Set());
@@ -195,6 +197,9 @@ export default function Dashboard() {
                 </span>
               )}
             </div>
+            <button className={styles.reportBtn} onClick={() => setReportOpen(true)}>
+              Send progress report
+            </button>
           </div>
 
           {/* Stats row */}
@@ -251,6 +256,8 @@ export default function Dashboard() {
 
         </div>
       </div>
+
+      {reportOpen && <ProgressReportModal onClose={() => setReportOpen(false)} />}
 
     </div>
   );

@@ -1,4 +1,4 @@
-import type { CareRequest, Status } from "./types";
+import type { CareRequest, PatientProfile, Status } from "./types";
 
 export const API_BASE =
   process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8000";
@@ -94,13 +94,37 @@ export async function getAgentConfig(patientId: string): Promise<AgentConfig> {
   return res.json();
 }
 
-export async function generateSummary(patientId: string): Promise<string> {
+export async function generateSummary(
+  patientId: string,
+  startDate?: string
+): Promise<string> {
   const res = await fetch(`${API_BASE}/api/summaries/generate`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ patient_id: patientId }),
+    body: JSON.stringify({ patient_id: patientId, start_date: startDate }),
   });
   if (!res.ok) throw new Error(`generateSummary failed: ${res.status}`);
   const data = await res.json();
   return data.summary;
+}
+
+export async function listPatients(): Promise<PatientProfile[]> {
+  const res = await fetch(`${API_BASE}/api/patients`, { cache: "no-store" });
+  if (!res.ok) throw new Error(`listPatients failed: ${res.status}`);
+  return res.json();
+}
+
+export interface ContactLookup {
+  name?: string;
+  email?: string | null;
+  phone?: string | null;
+}
+
+export async function lookupContact(name: string): Promise<ContactLookup> {
+  const res = await fetch(
+    `${API_BASE}/api/contacts/lookup?name=${encodeURIComponent(name)}`,
+    { cache: "no-store" }
+  );
+  if (!res.ok) throw new Error(`lookupContact failed: ${res.status}`);
+  return res.json();
 }
