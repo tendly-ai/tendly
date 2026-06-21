@@ -10,10 +10,19 @@ import {
   listRequests,
 } from "../../lib/api";
 import type { CareRequest } from "../../lib/types";
+import { VoiceAgentSession, type AgentState, type Caption } from "../../lib/voice";
 import { useAccount } from "../context/AccountContext";
 import styles from "./patient.module.css";
 
-type UIState = "idle" | "recording" | "processing" | "confirm" | "confirmed" | "error";
+type UIState =
+  | "idle"
+  | "connecting"
+  | "conversing"
+  | "recording"
+  | "processing"
+  | "confirm"
+  | "confirmed"
+  | "error";
 
 const URGENCY_DOT: Record<string, string> = {
   emergency: "#ef4444",
@@ -82,10 +91,15 @@ export default function PatientPage() {
   const [speechFailed, setSpeechFailed] = useState(false);
   const [recentReqs, setRecentReqs]   = useState<CareRequest[]>([]);
 
+  const [agentState, setAgentState] = useState<AgentState>("connecting");
+  const [captions, setCaptions]     = useState<Caption[]>([]);
+  const [pendingReq, setPendingReq] = useState<CareRequest | null>(null);
+
   const mediaRef    = useRef<MediaRecorder | null>(null);
   const chunksRef   = useRef<Blob[]>([]);
   const audioRef    = useRef<HTMLAudioElement | null>(null);
   const audioUrlRef = useRef<string | null>(null);
+  const sessionRef  = useRef<VoiceAgentSession | null>(null);
 
   useEffect(() => {
     if (!account) router.replace("/");
@@ -109,8 +123,66 @@ export default function PatientPage() {
     setUIState("idle"); setReq(null); setMessage(""); setTranscript("");
     setTextValue(""); setShowText(false);
     setSpeechReady(false); setSpeechFailed(false);
+    setCaptions([]); setPendingReq(null);
     audioRef.current?.pause(); audioRef.current = null;
     if (audioUrlRef.current) { URL.revokeObjectURL(audioUrlRef.current); audioUrlRef.current = null; }
+  }, []);
+
+  /* ---- Conversational voice agent ---- */
+
+  const endConversation = useCallback(async () => {
+    const session = sessionRef.current;
+    sessionRef.current = null;
+    if (session) await session.stop();
+    reset();
+  }, [reset]);
+
+  const startConversation = useCallback(async () => {
+    setCaptions([]); setPendingReq(null);
+    setAgentState("connecting"); setUIState("connecting");
+
+    const session = new VoiceAgentSession(patientId, {
+      onState: (s) => setAgentState(s),
+      onCaption: (c) =>
+        setCaptions((prev) => [...prev.slice(-7), c]),
+      onRequest: (r) => setPendingReq(r.requires_confirmation ? r : null),
+      onConfirmResult: () => setPendingReq(null),
+      onError: (msg) => {
+        setMessage(msg || "Something went wrong with the voice connection.");
+        setUIState("error");
+        sessionRef.current?.stop();
+        sessionRef.current = null;
+      },
+      onClose: () => {
+        sessionRef.current = null;
+        setUIState((cur) => (cur === "conversing" ? "idle" : cur));
+      },
+    });
+
+    try {
+      sessionRef.current = session;
+      await session.start();
+      setUIState("conversing");
+    } catch (err) {
+      sessionRef.current = null;
+      await session.stop().catch(() => {});
+      // Fall back to the single-shot recorder when the agent is unavailable.
+      setMessage(
+        "Live conversation isn't available right now. You can record a single request or type instead."
+      );
+      setUIState("error");
+    }
+  }, [patientId]);
+
+  // Confirm via on-screen buttons while the agent is live.
+  const confirmInConversation = useCallback(async (ok: boolean) => {
+    await sessionRef.current?.confirmViaButton(ok);
+    setPendingReq(null);
+  }, []);
+
+  // Stop any live session when leaving the page.
+  useEffect(() => {
+    return () => { sessionRef.current?.stop(); sessionRef.current = null; };
   }, []);
 
   const playTalkBack = useCallback(async (text: string) => {
@@ -261,10 +333,10 @@ export default function PatientPage() {
 
           {uiState === "idle" && (<>
             <p className={styles.cardPrompt}>What do you need?</p>
-            <button className={styles.talkBtn} onClick={toggleRecording} aria-label="Talk to your AI caregiver">
+            <button className={styles.talkBtn} onClick={startConversation} aria-label="Talk with Tendly">
               <MicIcon />
             </button>
-            <p className={styles.talkHint}>Talk to your caregiver</p>
+            <p className={styles.talkHint}>Talk with Tendly</p>
             {!showText
               ? <button className={styles.typeToggle} onClick={() => setShowText(true)}>or type your request</button>
               : <div className={styles.textArea}>
@@ -281,6 +353,49 @@ export default function PatientPage() {
                   </button>
                 </div>
             }
+          </>)}
+
+          {uiState === "connecting" && (<>
+            <div className={styles.spinner} />
+            <p className={styles.processingLabel}>Connecting…</p>
+          </>)}
+
+          {uiState === "conversing" && (<>
+            <p className={styles.recordingLabel}>
+              {agentState === "speaking"
+                ? "Tendly is speaking…"
+                : agentState === "thinking"
+                  ? "Thinking…"
+                  : "Listening…"}
+            </p>
+            <div className={styles.waveform}>
+              {Array.from({ length: 7 }).map((_, i) => <div key={i} className={styles.waveDot} />)}
+            </div>
+
+            {captions.length > 0 && (
+              <div className={styles.captionList}>
+                {captions.map((c, i) => (
+                  <p
+                    key={i}
+                    className={c.role === "assistant" ? styles.captionAgent : styles.captionUser}
+                  >
+                    {c.text}
+                  </p>
+                ))}
+              </div>
+            )}
+
+            {pendingReq && (
+              <div className={styles.confirmRow}>
+                <button className={styles.confirmYes} onClick={() => confirmInConversation(true)}>Yes, go ahead</button>
+                <button className={styles.confirmNo}  onClick={() => confirmInConversation(false)}>No, cancel</button>
+              </div>
+            )}
+
+            <button className={`${styles.talkBtn} ${styles.talkBtnRec}`} onClick={endConversation} aria-label="End conversation">
+              <StopIcon />
+            </button>
+            <p className={styles.talkHint}>Tap to end</p>
           </>)}
 
           {uiState === "recording" && (<>
@@ -319,7 +434,10 @@ export default function PatientPage() {
 
           {uiState === "error" && (<>
             <p className={`${styles.responseMsg} ${styles.responseMsgErr}`}>{message}</p>
-            <button className={styles.retryBtn} onClick={reset}>Try again</button>
+            <div className={styles.confirmRow}>
+              <button className={styles.confirmYes} onClick={() => { reset(); startRecording(); }}>Record instead</button>
+              <button className={styles.confirmNo} onClick={reset}>Try again</button>
+            </div>
           </>)}
 
         </div>

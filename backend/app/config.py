@@ -27,6 +27,16 @@ class Settings:
     allow_mocks: bool = _bool("TENDLY_ALLOW_MOCKS", True)
     allow_contact_llm_matching: bool = _bool("TENDLY_ALLOW_CONTACT_LLM_MATCHING", False)
 
+    # Deepgram Voice Agent (browser-side agent; backend mints tokens + prompt)
+    agent_listen_model: str = os.getenv("AGENT_LISTEN_MODEL", "nova-3")
+    agent_think_provider: str = os.getenv("AGENT_THINK_PROVIDER", "anthropic")
+    agent_think_model: str = os.getenv("AGENT_THINK_MODEL", "claude-sonnet-4-5")
+    agent_speak_model: str = os.getenv("AGENT_SPEAK_MODEL", "aura-2-thalia-en")
+    agent_token_ttl: int = int(os.getenv("AGENT_TOKEN_TTL", "30"))
+    # Local-dev fallback: if the key can't mint short-lived tokens, send the raw
+    # API key to the renderer. Acceptable for local Electron use; set False in prod.
+    agent_allow_raw_key: bool = _bool("AGENT_ALLOW_RAW_KEY", True)
+
 
 @lru_cache
 def get_settings() -> Settings:

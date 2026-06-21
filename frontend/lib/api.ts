@@ -75,6 +75,25 @@ export async function synthesizeSpeech(text: string): Promise<Blob> {
   return res.blob();
 }
 
+export interface AgentConfig {
+  enabled: boolean;
+  reason?: string;
+  // "bearer" = short-lived JWT (preferred); "token" = raw API key (local-dev fallback).
+  auth_type?: "bearer" | "token";
+  token?: string;
+  expires_in?: number;
+  // Deepgram Settings.agent block (listen/think/speak/greeting), built server-side.
+  agent: Record<string, unknown>;
+}
+
+export async function getAgentConfig(patientId: string): Promise<AgentConfig> {
+  const res = await fetch(`${API_BASE}/api/voice/agent-config/${patientId}`, {
+    cache: "no-store",
+  });
+  if (!res.ok) throw new Error(`getAgentConfig failed: ${res.status}`);
+  return res.json();
+}
+
 export async function generateSummary(patientId: string): Promise<string> {
   const res = await fetch(`${API_BASE}/api/summaries/generate`, {
     method: "POST",

@@ -246,8 +246,12 @@ def get_recent_transcripts(patient_id: str, limit: int = 10) -> list[str]:
 # ---------------------------------------------------------------------------
 # Derived context for triage + dashboard
 # ---------------------------------------------------------------------------
-def get_patient_context(patient_id: str) -> str:
-    """Plain-text context block used by triage prompts and dashboard cards."""
+def get_patient_context(patient_id: str, transcript_limit: int = 5) -> str:
+    """Plain-text context block used by triage prompts and dashboard cards.
+
+    *transcript_limit* controls how many recent utterances are appended; the
+    voice agent passes a larger value than triage to sound more familiar.
+    """
     p = get_patient(patient_id)
     if p is None:
         return ""
@@ -257,6 +261,12 @@ def get_patient_context(patient_id: str) -> str:
     ]
     if p.age:
         parts.append(f"Age: {p.age}")
+    if p.family_contacts:
+        # Name + relation only (no phone/email) — keeps PII out of the prompt.
+        parts.append(
+            "Family: "
+            + ", ".join(f"{c.name} ({c.relation})" for c in p.family_contacts)
+        )
     if p.common_requests:
         parts.append("Common requests: " + ", ".join(p.common_requests))
     if p.interests:
@@ -265,7 +275,7 @@ def get_patient_context(patient_id: str) -> str:
         parts.append("Preferences: " + p.routine_preferences)
     if p.notes:
         parts.append("Notes: " + p.notes)
-    recent = get_recent_transcripts(patient_id, limit=5)
+    recent = get_recent_transcripts(patient_id, limit=transcript_limit)
     if recent:
         parts.append("Recent things said: " + " | ".join(recent))
     return "\n".join(parts)

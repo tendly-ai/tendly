@@ -1,0 +1,6 @@
+{
+  "dependencies": {
+    "@deepgram/sdk": "^5.4.0",
+    "cross-fetch": "^4.1.0"
+  }
+}
