@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+set -euo pipefail
+cd "$(dirname "$0")"
+python -m venv .venv 2>/dev/null || true
+source .venv/bin/activate
+pip install -q -r requirements.txt
+exec uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
