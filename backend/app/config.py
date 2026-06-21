@@ -19,7 +19,7 @@ def _bool(name: str, default: bool) -> bool:
 class Settings:
     deepgram_api_key: str = os.getenv("DEEPGRAM_API_KEY", "")
     anthropic_api_key: str = os.getenv("ANTHROPIC_API_KEY", "")
-    anthropic_model: str = os.getenv("ANTHROPIC_MODEL", "claude-3-5-sonnet-20241022")
+    anthropic_model: str = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-5-20250929")
     redis_url: str = os.getenv("REDIS_URL", "")
     arize_api_key: str = os.getenv("ARIZE_API_KEY", "")
     arize_space_id: str = os.getenv("ARIZE_SPACE_ID", "")
