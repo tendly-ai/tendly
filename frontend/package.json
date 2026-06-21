@@ -2,11 +2,14 @@
   "name": "tendly-frontend",
   "version": "0.1.0",
   "private": true,
+  "main": "electron/main.js",
   "scripts": {
     "dev": "next dev -p 3000",
     "build": "next build",
     "start": "next start -p 3000",
-    "lint": "next lint"
+    "lint": "next lint",
+    "electron:dev": "concurrently --kill-others \"npm run dev\" \"wait-on http://localhost:3000 && NODE_ENV=development electron .\"",
+    "electron:build": "ELECTRON_BUILD=true next build && electron-builder"
   },
   "dependencies": {
     "next": "14.2.5",
@@ -20,6 +23,28 @@
     "@types/react-dom": "18.3.0",
     "eslint": "8.57.0",
     "eslint-config-next": "14.2.5",
-    "typescript": "5.5.3"
+    "typescript": "5.5.3",
+    "electron": "^31.0.0",
+    "electron-builder": "^24.13.3",
+    "concurrently": "^8.2.2",
+    "wait-on": "^7.2.0"
+  },
+  "build": {
+    "appId": "com.tendly.app",
+    "productName": "Tendly",
+    "directories": {
+      "output": "dist-electron"
+    },
+    "files": [
+      "out/**/*",
+      "electron/**/*"
+    ],
+    "mac": {
+      "target": "dmg",
+      "category": "public.app-category.healthcare"
+    },
+    "win": {
+      "target": "nsis"
+    }
   }
 }

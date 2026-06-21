@@ -46,7 +46,7 @@ cp ../.env.example ../.env   # fill in keys (optional; mocks work without them)
 ./run.sh                     # http://localhost:8000  (docs at /docs)
 ```
 
-Frontend:
+Frontend (browser):
 ```bash
 cd frontend
 npm install
@@ -58,6 +58,54 @@ npm run dev                  # http://localhost:3000
 With `TENDLY_ALLOW_MOCKS=true` (default), every integration falls back to a
 deterministic mock when its API key is missing, so the full app runs end-to-end
 without any credentials. Set keys in `.env` to use the real services.
+
+## Desktop app (Electron)
+
+### Dev mode
+
+Start the backend first (it is not auto-spawned in dev mode):
+
+```bash
+cd backend && ./run.sh
+```
+
+Then in a second terminal:
+
+```bash
+cd frontend
+npm run electron:dev
+```
+
+This starts the Next.js dev server and opens Electron pointing at `localhost:3000`.
+Hot-reload works normally — save a file and the window refreshes.
+
+### Production build
+
+```bash
+cd frontend
+npm run electron:build
+```
+
+This runs `next build` with static export enabled, then packages with
+`electron-builder`. The output lands in `frontend/dist-electron/`.
+
+On macOS you get a `.dmg`; on Windows a `.exe` installer (NSIS).
+
+> **Backend in production:** by default the packaged app expects the FastAPI
+> server to be running separately. To have Electron spawn it automatically,
+> set the env var `SPAWN_BACKEND=true` before launching — Electron will start
+> `uvicorn` from `backend/.venv/bin/python` and kill it on quit.
+
+### New dependencies (devDependencies, frontend only)
+
+| Package | Purpose |
+|---|---|
+| `electron` | Desktop shell |
+| `electron-builder` | Cross-platform packaging (DMG / NSIS) |
+| `concurrently` | Run Next.js dev server + Electron simultaneously |
+| `wait-on` | Waits for `localhost:3000` before opening the Electron window |
+
+System requirements for building: Node 18+, macOS 12+ (for DMG), Windows 10+ (for NSIS).
 
 ## Feature branches
 

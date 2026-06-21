@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; connect-src http://localhost:8000; media-src *; script-src 'unsafe-inline'; style-src 'unsafe-inline'">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Rounded', sans-serif;
+      background: transparent;
+      overflow: hidden;
+      -webkit-app-region: no-drag;
+    }
+
+    .shell {
+      margin: 8px;
+      background: rgba(32, 32, 36, 0.90);
+      border: 1px solid rgba(255,255,255,0.09);
+      border-radius: 18px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.45);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 20px 16px;
+      gap: 0;
+    }
+
+    /* ── Idle: just the button ── */
+    #btn-talk {
+      width: 76px;
+      height: 76px;
+      border-radius: 50%;
+      border: none;
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 3px;
+      background: linear-gradient(145deg, #4f46e5, #7c3aed);
+      box-shadow: 0 4px 18px rgba(79,70,229,0.5);
+      transition: transform .13s ease, box-shadow .13s ease;
+      color: white;
+    }
+    #btn-talk:hover  { transform: scale(1.07); box-shadow: 0 6px 24px rgba(79,70,229,0.65); }
+    #btn-talk:active { transform: scale(0.93); }
+    #btn-talk.recording {
+      background: linear-gradient(145deg, #dc2626, #b91c1c);
+      box-shadow: 0 4px 18px rgba(220,38,38,0.5);
+      animation: pulse 1s ease-in-out infinite;
+    }
+    @keyframes pulse {
+      0%,100% { transform:scale(1);    box-shadow:0 4px 18px rgba(220,38,38,.5); }
+      50%      { transform:scale(1.08); box-shadow:0 6px 26px rgba(220,38,38,.7); }
+    }
+
+    .btn-icon  { font-size: 28px; line-height: 1; }
+    .btn-label { font-size: 9px; font-weight: 700; letter-spacing: .5px; text-transform: uppercase; opacity: .85; }
+
+    /* ── Waveform (recording) ── */
+    .waveform {
+      display: none;
+      align-items: center;
+      gap: 3px;
+      height: 26px;
+      margin-top: 12px;
+    }
+    .waveform.active { display: flex; }
+    .bar {
+      width: 4px; border-radius: 2px;
+      background: #dc2626;
+      animation: wave .85s ease-in-out infinite;
+    }
+    .bar:nth-child(1){animation-delay:0s}
+    .bar:nth-child(2){animation-delay:.1s}
+    .bar:nth-child(3){animation-delay:.2s}
+    .bar:nth-child(4){animation-delay:.3s}
+    .bar:nth-child(5){animation-delay:.2s}
+    .bar:nth-child(6){animation-delay:.1s}
+    .bar:nth-child(7){animation-delay:0s}
+    @keyframes wave { 0%,100%{height:5px} 50%{height:22px} }
+
+    /* ── Spinner (processing) ── */
+    .spinner {
+      display: none;
+      width: 26px; height: 26px;
+      border: 3px solid rgba(255,255,255,.12);
+      border-top-color: #a78bfa;
+      border-radius: 50%;
+      animation: spin .7s linear infinite;
+      margin-top: 12px;
+    }
+    .spinner.active { display: block; }
+    @keyframes spin { to{transform:rotate(360deg)} }
+
+    /* ── Response ── */
+    .response {
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      width: 100%;
+      margin-top: 12px;
+    }
+    .response.active { display: flex; }
+
+    .resp-msg {
+      font-size: 11.5px;
+      color: rgba(255,255,255,.82);
+      text-align: center;
+      line-height: 1.45;
+    }
+    .resp-msg.ok    { color: #86efac; }
+    .resp-msg.error { color: #fca5a5; }
+
+    .confirm-row { display: flex; gap: 8px; }
+    .btn-y, .btn-n {
+      flex: 1;
+      padding: 7px 0;
+      font-size: 13px;
+      font-weight: 700;
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+      min-width: 54px;
+    }
+    .btn-y { background:#16a34a; color:#fff; }
+    .btn-n { background:#dc2626; color:#fff; }
+
+    .btn-reset {
+      font-size: 10px;
+      color: rgba(255,255,255,.38);
+      background: none;
+      border: none;
+      cursor: pointer;
+      text-decoration: underline;
+      text-underline-offset: 2px;
+      padding: 2px;
+    }
+  </style>
+</head>
+<body>
+<div class="shell" id="shell">
+
+  <button id="btn-talk" aria-label="Talk to your AI caregiver">
+    <span class="btn-icon">🎙</span>
+    <span class="btn-label">Talk</span>
+  </button>
+
+  <div class="waveform" id="waveform">
+    <div class="bar"></div><div class="bar"></div><div class="bar"></div>
+    <div class="bar"></div><div class="bar"></div><div class="bar"></div>
+    <div class="bar"></div>
+  </div>
+
+  <div class="spinner" id="spinner"></div>
+
+  <div class="response" id="response">
+    <p class="resp-msg" id="resp-msg"></p>
+    <div class="confirm-row" id="confirm-row" style="display:none">
+      <button class="btn-y" id="btn-y">Yes</button>
+      <button class="btn-n" id="btn-n">No</button>
+    </div>
+    <button class="btn-reset" id="btn-reset">new request</button>
+  </div>
+
+</div>
+
+<script>
+const BACKEND = 'http://localhost:8000';
+const DEFAULT_PATIENT = 'patient_001';
+
+const talkBtn   = document.getElementById('btn-talk');
+const waveform  = document.getElementById('waveform');
+const spinner   = document.getElementById('spinner');
+const response  = document.getElementById('response');
+const respMsg   = document.getElementById('resp-msg');
+const confirmRow= document.getElementById('confirm-row');
+const btnY      = document.getElementById('btn-y');
+const btnN      = document.getElementById('btn-n');
+const btnReset  = document.getElementById('btn-reset');
+const shell     = document.getElementById('shell');
+
+let mediaRecorder = null, chunks = [], currentReq = null;
+
+function resize() {
+  requestAnimationFrame(() => {
+    const h = shell.scrollHeight + 16;
+    if (window.electron?.resizePopover) window.electron.resizePopover(Math.max(120, h));
+  });
+}
+
+function setMode(mode) {
+  // idle | recording | processing | response
+  talkBtn.className = mode === 'recording' ? 'recording' : '';
+  talkBtn.querySelector('.btn-icon').textContent = mode === 'recording' ? '⏹' : '🎙';
+  talkBtn.querySelector('.btn-label').textContent = mode === 'recording' ? 'Stop' : 'Talk';
+  waveform.classList.toggle('active', mode === 'recording');
+  spinner.classList.toggle('active',  mode === 'processing');
+  response.classList.toggle('active', mode === 'response');
+  resize();
+}
+
+talkBtn.addEventListener('click', () => {
+  if (mediaRecorder?.state === 'recording') {
+    mediaRecorder.stop();
+    setMode('processing');
+  } else {
+    startRecording();
+  }
+});
+
+async function startRecording() {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    chunks = [];
+    mediaRecorder = new MediaRecorder(stream, {
+      mimeType: MediaRecorder.isTypeSupported('audio/webm;codecs=opus') ? 'audio/webm;codecs=opus' : 'audio/webm',
+    });
+    mediaRecorder.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
+    mediaRecorder.onstop = async () => {
+      stream.getTracks().forEach(t => t.stop());
+      await submit(new Blob(chunks, { type: 'audio/webm' }));
+    };
+    mediaRecorder.start();
+    setMode('recording');
+  } catch {
+    showResp('Mic access denied.', 'error');
+  }
+}
+
+async function submit(blob) {
+  setMode('processing');
+  try {
+    const fd = new FormData();
+    fd.append('patient_id', DEFAULT_PATIENT);
+    fd.append('audio', blob, 'rec.webm');
+    const res = await fetch(`${BACKEND}/api/requests`, { method: 'POST', body: fd });
+    if (!res.ok) throw new Error();
+    handleResponse(await res.json());
+  } catch {
+    showResp('Something went wrong.', 'error');
+  }
+}
+
+function handleResponse(r) {
+  currentReq = r;
+  if (r.requires_confirmation && r.confirmation_prompt) {
+    showResp(r.confirmation_prompt, '', true);
+  } else {
+    showResp(r.spoken_response || "Got it — I've let your caregiver know.", 'ok');
+  }
+}
+
+function showResp(msg, cls, confirm = false) {
+  respMsg.textContent = msg;
+  respMsg.className = `resp-msg ${cls}`;
+  confirmRow.style.display = confirm ? 'flex' : 'none';
+  setMode('response');
+}
+
+btnY.addEventListener('click', async () => {
+  if (!currentReq) return;
+  setMode('processing');
+  try {
+    const r = await fetch(`${BACKEND}/api/requests/${currentReq.request_id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'in_progress' }),
+    });
+    const d = await r.json();
+    showResp(d.spoken_response || "On it!", 'ok');
+  } catch { showResp("Something went wrong.", 'error'); }
+});
+
+btnN.addEventListener('click', async () => {
+  if (!currentReq) return;
+  setMode('processing');
+  try {
+    await fetch(`${BACKEND}/api/requests/${currentReq.request_id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'cancelled' }),
+    });
+    showResp("Cancelled.", 'ok');
+  } catch { showResp("Something went wrong.", 'error'); }
+});
+
+btnReset.addEventListener('click', () => {
+  currentReq = null;
+  setMode('idle');
+});
+
+setMode('idle');
+</script>
+</body>
+</html>

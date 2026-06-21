@@ -3,6 +3,8 @@ const { withSentryConfig } = require("@sentry/nextjs");
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  // Emit a static export to `out/` when building for Electron production
+  ...(process.env.ELECTRON_BUILD === 'true' && { output: 'export' }),
 };
 
 // Wrap with Sentry only when the SDK is available; otherwise export bare config.

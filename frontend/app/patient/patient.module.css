@@ -7,57 +7,65 @@
   align-items: center;
   justify-content: center;
   padding: 24px;
-  transition: background-color 0.4s ease;
+  transition: background 0.5s ease;
 }
 
 .containerIdle {
-  background-color: #e8f0fe;
+  background: linear-gradient(150deg, #dbeafe 0%, #ede9fe 50%, #fce7f3 100%);
 }
 
 .containerRecording {
-  background-color: #fde8e8;
+  background: linear-gradient(150deg, #fef2f2 0%, #fde8e8 100%);
 }
 
 .containerProcessing {
-  background-color: #f0f0f0;
+  background: linear-gradient(150deg, #f1f5f9 0%, #e2e8f0 100%);
 }
 
 .containerConfirm {
-  background-color: #fef9e7;
+  background: linear-gradient(150deg, #fffbeb 0%, #fef3c7 100%);
 }
 
 .containerConfirmed {
-  background-color: #e8f8e8;
+  background: linear-gradient(150deg, #d1fae5 0%, #dcfce7 100%);
 }
 
 .containerError {
-  background-color: #fde8e8;
+  background: linear-gradient(150deg, #fef2f2 0%, #fee2e2 100%);
 }
 
 .card {
-  max-width: 560px;
+  max-width: 520px;
   width: 100%;
   text-align: center;
-  padding: 40px 24px;
+  padding: 48px 32px 40px;
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  border-radius: 28px;
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.10), 0 1px 4px rgba(0, 0, 0, 0.06);
 }
 
 .title {
-  font-size: 28px;
-  font-weight: 700;
-  color: #1a2233;
-  margin: 0 0 8px 0;
+  font-size: 30px;
+  font-weight: 800;
+  color: #0f172a;
+  margin: 0 0 8px;
+  letter-spacing: -0.5px;
 }
 
 .subtitle {
-  font-size: 20px;
-  color: #475067;
-  margin: 0 0 40px 0;
+  font-size: 18px;
+  color: #64748b;
+  margin: 0 0 36px;
+  font-weight: 400;
 }
 
-/* Main talk button */
+/* ── Main talk button ──────────────────────────────── */
 .talkButton {
-  width: 180px;
-  height: 180px;
+  width: 172px;
+  height: 172px;
   border-radius: 50%;
   border: none;
   cursor: pointer;
@@ -66,229 +74,232 @@
   align-items: center;
   justify-content: center;
   gap: 8px;
-  margin: 0 auto 32px auto;
+  margin: 0 auto 28px;
   transition: transform 0.15s ease, box-shadow 0.15s ease;
-  box-shadow: 0 4px 24px rgba(37, 99, 235, 0.25);
+  position: relative;
 }
 
-.talkButton:hover {
-  transform: scale(1.05);
-  box-shadow: 0 6px 32px rgba(37, 99, 235, 0.35);
-}
-
-.talkButton:active {
-  transform: scale(0.97);
-}
+.talkButton:active { transform: scale(0.95) !important; }
 
 .talkButtonIdle {
-  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+  background: linear-gradient(145deg, #4f46e5 0%, #7c3aed 100%);
   color: white;
+  box-shadow:
+    0 6px 28px rgba(79, 70, 229, 0.45),
+    0 2px 8px rgba(79, 70, 229, 0.25),
+    inset 0 1px 0 rgba(255,255,255,0.15);
+}
+.talkButtonIdle:hover {
+  transform: scale(1.05);
+  box-shadow:
+    0 10px 40px rgba(79, 70, 229, 0.55),
+    0 4px 12px rgba(79, 70, 229, 0.3),
+    inset 0 1px 0 rgba(255,255,255,0.15);
 }
 
 .talkButtonRecording {
-  background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
+  background: linear-gradient(145deg, #dc2626 0%, #b91c1c 100%);
   color: white;
-  animation: pulse 1.2s ease-in-out infinite;
+  animation: pulse 1.1s ease-in-out infinite;
+  box-shadow:
+    0 6px 28px rgba(220, 38, 38, 0.45),
+    inset 0 1px 0 rgba(255,255,255,0.15);
 }
 
 @keyframes pulse {
-  0%, 100% { transform: scale(1); box-shadow: 0 4px 24px rgba(220, 38, 38, 0.3); }
-  50% { transform: scale(1.06); box-shadow: 0 6px 40px rgba(220, 38, 38, 0.5); }
+  0%, 100% {
+    transform: scale(1);
+    box-shadow: 0 6px 28px rgba(220, 38, 38, 0.4), inset 0 1px 0 rgba(255,255,255,0.15);
+  }
+  50% {
+    transform: scale(1.07);
+    box-shadow: 0 10px 44px rgba(220, 38, 38, 0.6), inset 0 1px 0 rgba(255,255,255,0.15);
+  }
 }
 
-.buttonIcon {
-  font-size: 48px;
-  line-height: 1;
-}
+.buttonIcon  { font-size: 52px; line-height: 1; }
+.buttonLabel { font-size: 16px; font-weight: 700; letter-spacing: -0.1px; }
 
-.buttonLabel {
-  font-size: 20px;
-  font-weight: 600;
-}
-
-/* Status label below the button */
+/* ── Status / waveform ─────────────────────────────── */
 .statusLabel {
-  font-size: 22px;
-  font-weight: 600;
-  margin: 0 0 16px 0;
-  min-height: 30px;
+  font-size: 20px;
+  font-weight: 700;
+  margin: 0 0 12px;
+  min-height: 28px;
+  letter-spacing: -0.2px;
 }
 
-/* Waveform dots for recording state */
 .waveform {
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 6px;
-  margin-bottom: 24px;
+  margin-bottom: 20px;
   height: 40px;
 }
 
 .waveDot {
-  width: 8px;
+  width: 7px;
   border-radius: 4px;
   background: #dc2626;
-  animation: wave 1s ease-in-out infinite;
+  animation: wave 0.9s ease-in-out infinite;
 }
-
-.waveDot:nth-child(1) { animation-delay: 0s; }
-.waveDot:nth-child(2) { animation-delay: 0.1s; }
-.waveDot:nth-child(3) { animation-delay: 0.2s; }
-.waveDot:nth-child(4) { animation-delay: 0.3s; }
-.waveDot:nth-child(5) { animation-delay: 0.4s; }
-.waveDot:nth-child(6) { animation-delay: 0.5s; }
-.waveDot:nth-child(7) { animation-delay: 0.6s; }
+.waveDot:nth-child(1) { animation-delay: 0s;   }
+.waveDot:nth-child(2) { animation-delay: .12s; }
+.waveDot:nth-child(3) { animation-delay: .22s; }
+.waveDot:nth-child(4) { animation-delay: .32s; }
+.waveDot:nth-child(5) { animation-delay: .22s; }
+.waveDot:nth-child(6) { animation-delay: .12s; }
+.waveDot:nth-child(7) { animation-delay: 0s;   }
 
 @keyframes wave {
-  0%, 100% { height: 12px; }
-  50% { height: 36px; }
+  0%, 100% { height: 10px; }
+  50%       { height: 34px; }
 }
 
-/* Spinner for processing state */
+/* ── Spinner ───────────────────────────────────────── */
 .spinner {
-  width: 56px;
-  height: 56px;
-  border: 5px solid #d1d5db;
-  border-top-color: #2563eb;
+  width: 52px;
+  height: 52px;
+  border: 5px solid rgba(0,0,0,0.08);
+  border-top-color: #4f46e5;
   border-radius: 50%;
-  animation: spin 0.8s linear infinite;
-  margin: 0 auto 16px auto;
+  animation: spin 0.75s linear infinite;
+  margin: 0 auto 16px;
 }
 
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
+@keyframes spin { to { transform: rotate(360deg); } }
 
-/* Transcript display */
+/* ── Transcript ────────────────────────────────────── */
 .transcript {
-  font-size: 20px;
-  color: #374151;
-  background: #f9fafb;
-  border-radius: 12px;
-  padding: 16px 20px;
-  margin: 16px 0 24px 0;
+  font-size: 18px;
+  color: #475569;
+  background: rgba(0,0,0,0.03);
+  border: 1px solid rgba(0,0,0,0.07);
+  border-left: 4px solid #4f46e5;
+  border-radius: 0 12px 12px 0;
+  padding: 14px 18px;
+  margin: 12px 0 20px;
   font-style: italic;
-  border: 1px solid #e5e7eb;
+  text-align: left;
+  line-height: 1.45;
 }
 
-/* Message text for confirmed/error states */
+/* ── Message text ──────────────────────────────────── */
 .messageText {
-  font-size: 24px;
+  font-size: 22px;
   font-weight: 600;
-  color: #1a2233;
-  margin: 0 0 24px 0;
-  line-height: 1.4;
+  color: #0f172a;
+  margin: 0 0 20px;
+  line-height: 1.45;
+  letter-spacing: -0.2px;
 }
+.messageTextSuccess { color: #15803d; }
+.messageTextError   { color: #b91c1c; }
 
-.messageTextSuccess {
-  color: #15803d;
-}
-
-.messageTextError {
-  color: #b91c1c;
-}
-
-/* Confirm/action buttons */
+/* ── Confirm buttons ───────────────────────────────── */
 .confirmButtons {
   display: flex;
-  gap: 20px;
+  gap: 16px;
   justify-content: center;
-  margin-top: 32px;
+  margin-top: 28px;
 }
 
 .confirmYes {
   padding: 20px 48px;
-  font-size: 24px;
-  font-weight: 700;
-  background: #16a34a;
+  font-size: 22px;
+  font-weight: 800;
+  background: linear-gradient(145deg, #16a34a 0%, #15803d 100%);
   color: white;
   border: none;
-  border-radius: 16px;
+  border-radius: 18px;
   cursor: pointer;
-  min-width: 140px;
-  transition: transform 0.1s ease;
+  min-width: 130px;
+  box-shadow: 0 4px 16px rgba(22,163,74,0.35);
+  transition: transform 0.1s ease, box-shadow 0.1s ease;
 }
-
-.confirmYes:hover { transform: scale(1.04); }
+.confirmYes:hover { transform: scale(1.04); box-shadow: 0 6px 24px rgba(22,163,74,0.45); }
 .confirmYes:active { transform: scale(0.97); }
 
 .confirmNo {
   padding: 20px 48px;
-  font-size: 24px;
+  font-size: 22px;
+  font-weight: 800;
+  background: linear-gradient(145deg, #dc2626 0%, #b91c1c 100%);
+  color: white;
+  border: none;
+  border-radius: 18px;
+  cursor: pointer;
+  min-width: 130px;
+  box-shadow: 0 4px 16px rgba(220,38,38,0.35);
+  transition: transform 0.1s ease, box-shadow 0.1s ease;
+}
+.confirmNo:hover { transform: scale(1.04); box-shadow: 0 6px 24px rgba(220,38,38,0.45); }
+.confirmNo:active { transform: scale(0.97); }
+
+/* ── Action / retry buttons ────────────────────────── */
+.actionButton {
+  padding: 18px 40px;
+  font-size: 20px;
   font-weight: 700;
-  background: #dc2626;
+  background: linear-gradient(145deg, #4f46e5 0%, #4338ca 100%);
   color: white;
   border: none;
   border-radius: 16px;
   cursor: pointer;
-  min-width: 140px;
-  transition: transform 0.1s ease;
-}
-
-.confirmNo:hover { transform: scale(1.04); }
-.confirmNo:active { transform: scale(0.97); }
-
-/* Done / Try Again / New Request button */
-.actionButton {
-  padding: 18px 40px;
-  font-size: 22px;
-  font-weight: 600;
-  background: #2563eb;
-  color: white;
-  border: none;
-  border-radius: 14px;
-  cursor: pointer;
   margin-top: 8px;
-  transition: transform 0.1s ease;
+  box-shadow: 0 4px 16px rgba(79,70,229,0.35);
+  transition: transform 0.1s ease, box-shadow 0.1s ease;
 }
-
-.actionButton:hover { transform: scale(1.04); }
+.actionButton:hover { transform: scale(1.04); box-shadow: 0 6px 24px rgba(79,70,229,0.45); }
 .actionButton:active { transform: scale(0.97); }
 
 .retryButton {
   composes: actionButton;
-  background: #ea580c;
+  background: linear-gradient(145deg, #ea580c 0%, #c2410c 100%);
+  box-shadow: 0 4px 16px rgba(234,88,12,0.35);
 }
 
+/* ── Replay / speech ───────────────────────────────── */
 .replayButton {
-  padding: 12px 22px;
-  font-size: 18px;
+  padding: 12px 24px;
+  font-size: 17px;
   font-weight: 600;
-  background: #ffffff;
-  color: #1d4ed8;
-  border: 2px solid #bfdbfe;
-  border-radius: 12px;
+  background: white;
+  color: #4f46e5;
+  border: 2px solid #c7d2fe;
+  border-radius: 14px;
   cursor: pointer;
-  margin: 0 0 12px 0;
-  transition: transform 0.1s ease, border-color 0.1s ease;
+  margin: 0 0 12px;
+  transition: transform 0.1s ease, border-color 0.1s ease, background 0.1s ease;
 }
-
 .replayButton:hover {
   transform: scale(1.03);
-  border-color: #60a5fa;
+  border-color: #818cf8;
+  background: #eef2ff;
 }
-
-.replayButton:active {
-  transform: scale(0.98);
-}
+.replayButton:active { transform: scale(0.98); }
 
 .speechNote {
-  font-size: 16px;
-  color: #6b7280;
-  margin: -8px 0 12px 0;
+  font-size: 15px;
+  color: #94a3b8;
+  margin: -6px 0 12px;
 }
 
-/* Text input fallback area */
+/* ── Text fallback ─────────────────────────────────── */
 .fallbackToggle {
-  font-size: 18px;
-  color: #6b7280;
+  font-size: 16px;
+  color: #94a3b8;
   background: none;
   border: none;
   cursor: pointer;
   text-decoration: underline;
-  margin-top: 16px;
-  padding: 8px;
+  text-underline-offset: 3px;
+  margin-top: 14px;
+  padding: 6px;
+  transition: color 0.1s ease;
 }
+.fallbackToggle:hover { color: #64748b; }
 
 .textInputArea {
   margin-top: 16px;
@@ -299,66 +310,77 @@
 }
 
 .textInput {
-  font-size: 22px;
+  font-size: 20px;
   padding: 14px 18px;
   width: 100%;
-  max-width: 420px;
-  border-radius: 12px;
-  border: 2px solid #cbd5e1;
+  max-width: 400px;
+  border-radius: 14px;
+  border: 2px solid #e2e8f0;
   outline: none;
-  transition: border-color 0.2s;
+  color: #0f172a;
+  background: white;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
-
 .textInput:focus {
-  border-color: #2563eb;
+  border-color: #4f46e5;
+  box-shadow: 0 0 0 3px rgba(79,70,229,0.12);
 }
 
 .textSubmit {
   padding: 14px 36px;
-  font-size: 22px;
-  font-weight: 600;
-  background: #2563eb;
+  font-size: 20px;
+  font-weight: 700;
+  background: linear-gradient(145deg, #4f46e5 0%, #4338ca 100%);
   color: white;
   border: none;
-  border-radius: 12px;
+  border-radius: 14px;
   cursor: pointer;
+  box-shadow: 0 4px 16px rgba(79,70,229,0.3);
   transition: transform 0.1s ease;
 }
-
-.textSubmit:hover { transform: scale(1.04); }
+.textSubmit:hover  { transform: scale(1.04); }
 .textSubmit:active { transform: scale(0.97); }
 .textSubmit:disabled {
-  background: #93c5fd;
+  background: #c7d2fe;
+  color: white;
   cursor: not-allowed;
   transform: none;
+  box-shadow: none;
 }
 
-/* Patient selector */
+/* ── Patient selector ──────────────────────────────── */
 .patientSelector {
   position: absolute;
   top: 16px;
-  right: 16px;
+  right: 20px;
   display: flex;
   align-items: center;
   gap: 8px;
 }
 
 .patientLabel {
-  font-size: 16px;
-  color: #6b7280;
+  font-size: 14px;
+  color: #94a3b8;
+  font-weight: 500;
 }
 
 .patientSelect {
-  font-size: 16px;
+  font-size: 14px;
   padding: 6px 10px;
-  border-radius: 8px;
-  border: 1px solid #d1d5db;
+  border-radius: 10px;
+  border: 1.5px solid #e2e8f0;
   background: white;
+  color: #0f172a;
+  cursor: pointer;
+  outline: none;
+  transition: border-color 0.15s;
 }
+.patientSelect:focus { border-color: #4f46e5; }
 
-/* Checkmark icon for confirmed */
+/* ── Checkmark ─────────────────────────────────────── */
 .checkmark {
-  font-size: 64px;
-  margin-bottom: 16px;
+  font-size: 60px;
+  margin-bottom: 12px;
   line-height: 1;
+  display: block;
 }
